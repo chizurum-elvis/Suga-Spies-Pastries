@@ -1,0 +1,18 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions;
+select plan(6);
+insert into auth.users (id, email) values ('90000000-0000-4000-8000-000000000001', 'owner@example.com'), ('90000000-0000-4000-8000-000000000002', 'stranger@example.com');
+insert into public.admin_users (user_id, role, is_active) values ('90000000-0000-4000-8000-000000000001', 'owner', true);
+set local role authenticated;
+set local request.jwt.claim.sub = '90000000-0000-4000-8000-000000000002';
+select throws_ok($$insert into storage.objects (bucket_id, name, owner_id) values ('product-images', 'stranger/file.jpg', '90000000-0000-4000-8000-000000000002')$$, '42501', null, 'a non-owner cannot upload product images');
+select is_empty($$select name from storage.objects where bucket_id = 'product-images'$$, 'a non-owner cannot list owner storage objects');
+set local request.jwt.claim.sub = '90000000-0000-4000-8000-000000000001';
+select lives_ok($$insert into storage.objects (bucket_id, name, owner_id) values ('product-images', 'owner/file.jpg', '90000000-0000-4000-8000-000000000001')$$, 'the owner can create an object record');
+select results_eq($$select name from storage.objects where bucket_id = 'product-images' and name = 'owner/file.jpg'$$, array['owner/file.jpg'], 'the owner can list product image objects');
+select lives_ok($$update storage.objects set name = 'owner/renamed.jpg' where bucket_id = 'product-images' and name = 'owner/file.jpg'$$, 'the owner can update an object record');
+set local storage.allow_delete_query = 'true';
+select results_eq($$delete from storage.objects where bucket_id = 'product-images' and name = 'owner/renamed.jpg' returning name$$, array['owner/renamed.jpg'], 'the owner can delete an object record');
+select * from finish();
+rollback;

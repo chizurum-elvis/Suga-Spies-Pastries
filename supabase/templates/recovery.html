@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin: 0; background: #fbf6ef; color: #241916">
+    <div
+      style="
+        margin: 0 auto;
+        max-width: 560px;
+        padding: 40px 24px;
+        font-family: Arial, sans-serif;
+      "
+    >
+      <p
+        style="
+          margin: 0 0 12px;
+          color: #8e234f;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        "
+      >
+        Suga Spies · Private owner access
+      </p>
+      <h1 style="margin: 0 0 16px; font-size: 28px; line-height: 1.2">
+        Reset your owner password
+      </h1>
+      <p
+        style="
+          margin: 0 0 24px;
+          color: #675550;
+          font-size: 16px;
+          line-height: 1.6;
+        "
+      >
+        We received a request to choose a new password for the Suga Spies owner
+        workspace. Continue only if you made this request.
+      </p>
+      <p style="margin: 0 0 24px">
+        <a
+          href="{{ .SiteURL }}/admin/recover?token_hash={{ .TokenHash }}&type=recovery"
+          style="
+            display: inline-block;
+            border-radius: 10px;
+            background: #8e234f;
+            padding: 14px 20px;
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+          "
+        >
+          Continue password recovery
+        </a>
+      </p>
+      <p style="margin: 0; color: #675550; font-size: 14px; line-height: 1.6">
+        If you did not request this email, leave the link unused and keep your
+        existing password.
+      </p>
+    </div>
+  </body>
+</html>

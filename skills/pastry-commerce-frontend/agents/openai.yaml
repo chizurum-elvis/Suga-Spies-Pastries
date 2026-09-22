@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pastry Commerce Frontend"
+  short_description: "Design and verify premium pastry commerce UI"
+  default_prompt: "Use $pastry-commerce-frontend to design, implement, and verify a polished pastry-commerce frontend."
