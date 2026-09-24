@@ -48,7 +48,7 @@ In another terminal run the recovery worker while testing:
 npm run payments:worker
 ```
 
-Production hosting must call the reconciliation route at least once per minute. This repository includes `vercel.json`, which asks Vercel Cron to call `GET /api/internal/payments/reconcile` every minute. Add a strong `CRON_SECRET` to the Vercel project; Vercel sends it as `Authorization: Bearer <CRON_SECRET>`. Every-minute cron schedules require Vercel Pro. If the deployment uses another scheduler, call `POST /api/internal/payments/reconcile` with `Authorization: Bearer <PAYMENT_WORKER_SECRET>` instead.
+Production hosting must call the reconciliation route at least once per minute. The repository's Vercel Cron configuration uses a once-daily schedule for Vercel Hobby compatibility, so it is not sufficient for production payment reconciliation. Add a strong `CRON_SECRET` to the Vercel project; Vercel sends it as `Authorization: Bearer <CRON_SECRET>`. For production, use Vercel Pro for the per-minute schedule or another scheduler that calls `POST /api/internal/payments/reconcile` with `Authorization: Bearer <PAYMENT_WORKER_SECRET>` instead.
 
 Checkout deliberately refuses to start when the worker has not checked in for three minutes. This fail-closed check prevents an accepted wallet payment from being left unreconciled. After deployment, the first successful scheduled call creates the health heartbeat and enables checkout. Disabling new checkout does not stop reconciliation of an already accepted payment.
 
