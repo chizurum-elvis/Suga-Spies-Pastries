@@ -639,10 +639,10 @@ Use this section as the implementation source of truth when it conflicts with th
 14. Orders of 50 pieces or more may complete ordinary checkout and still count as one order.
 15. Applicable boxes have a minimum of four total pieces and may mix flavours; after four, quantity increases by one. Regular cheesecake has a minimum of one, while mini cheesecakes have a minimum of four.
 16. All products may offer configured customizations. Decorations for cakes, cookies, and cupcakes and non-plain cheesecakes may cost extra.
-17. Apple Pay and Google Pay are the only launch payment methods. There is no e-transfer and no ordinary manual card-entry checkout.
-18. Wallet checkout holds capacity for 15 minutes. Only verified provider confirmation creates a paid, confirmed order.
+17. September 24 update: accept credit/debit cards through Stripe's hosted Payment Element on desktop and mobile, alongside Apple Pay and Google Pay where available. This replaces the earlier wallet-only decision. No e-transfer, Link, PayPal, or buy-now-pay-later methods.
+18. Card and wallet checkout hold capacity for 15 minutes. Only verified provider confirmation creates a paid, confirmed order.
 19. With date-only delivery, the deterministic cancellation cutoff is the start of the selected Toronto delivery date minus 24 hours. No delivery time is promised or inferred.
-20. An eligible cancellation happens immediately and refunds the entire amount paid to the original wallet payment method.
+20. An eligible cancellation happens immediately and refunds the entire amount paid to the original payment method.
 21. Refunds should be initiated immediately; approximately three days is the owner's desired customer expectation, subject to provider/bank timing.
 22. After failed delivery, redelivery is allowed only after the customer pays a new delivery fee.
 23. The former collection fallback after a failed delivery is withdrawn with pickup. Do not offer collection. The final unclaimed-order/discard policy must be confirmed before implementing failed-delivery handling.
@@ -667,7 +667,7 @@ The final menu must define each allowed option, price, character limit, lead-tim
 
 ### B. Wallet availability
 
-The “Apple Pay and Google Pay only” decision means customers on an unsupported device/browser cannot complete payment. Verify this limitation during business-owner testing and provide a clear compatibility message rather than silently showing no payment option.
+Wallets appear only on eligible devices/browsers. Ordinary card entry remains available through Stripe when neither wallet is supported. Test cards and wallets independently, including bank authentication and declined payments. Card details never pass through the application server.
 
 ### C. Refund timing wording
 

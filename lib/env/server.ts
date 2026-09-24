@@ -30,6 +30,7 @@ export function getServerEnvironment() {
     CHECKOUT_POLICIES_JSON: process.env.CHECKOUT_POLICIES_JSON,
     ORDER_ACCESS_SECRET: process.env.ORDER_ACCESS_SECRET,
     PAYMENT_WORKER_SECRET: process.env.PAYMENT_WORKER_SECRET,
+    CRON_SECRET: process.env.CRON_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     ORDER_EMAIL_FROM: process.env.ORDER_EMAIL_FROM,
     ORDER_ALERT_EMAIL: process.env.ORDER_ALERT_EMAIL,

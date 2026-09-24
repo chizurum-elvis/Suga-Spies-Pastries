@@ -11,7 +11,7 @@ Suga Spies is a mobile-first pastry ordering and owner-operations application fo
 
 The application is available at [http://localhost:3000](http://localhost:3000). The public menu is at `/menu`, the persisted guest cart is at `/cart`, and the reusable component preview is at `/foundation`. The owner workspace at `/admin` is private and fails closed until Supabase authentication is configured.
 
-The site is delivery-only. Checkout continues through `/checkout/fulfillment`, `/checkout/details`, and `/checkout/payment`; the owner manages delivery rates at `/admin/delivery` and paid orders at `/admin/orders`. See [the payment and order setup guide](docs/payment-order-vertical-slice.md) before enabling any sandbox or live payment.
+The site is delivery-only. Checkout continues through `/checkout/fulfillment`, `/checkout/details`, and `/checkout/payment`; the owner manages delivery rates at `/admin/delivery` and paid orders at `/admin/orders`. See [the payment and order setup guide](docs/payment-order-vertical-slice.md) before enabling any sandbox or live payment, webhook, or reconciliation schedule.
 
 ## Quality commands
 

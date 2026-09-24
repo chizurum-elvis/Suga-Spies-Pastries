@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Clock3, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useCart } from "@/components/cart/cart-provider";
 import { CartEditButton } from "@/components/cart/cart-edit-button";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import {
   PurchaseSummary,
   DeliverySummary,
 } from "@/components/checkout/purchase-summary";
-import { WalletPayment } from "@/components/checkout/wallet-payment";
+import { PaymentMethods } from "@/components/checkout/payment-methods";
 import {
   paymentReviewSchema,
   paymentAttemptViewSchema,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/payments/schema";
 import { formatBusinessDateTime } from "@/lib/i18n/format";
 import { serializeCart } from "@/lib/cart/schema";
+import { formatCents } from "@/lib/catalog/presentation";
 
 async function payload(response: Response) {
   const body = await response.json();
@@ -41,15 +43,17 @@ export function PaymentCheckout({
   onAttemptChange?: (attempt: PaymentAttemptView | null) => void;
   refreshKey?: number;
 }) {
-  const { cart, hydrated } = useCart();
+  const { cart, hydrated, openCart, setCheckoutLocked } = useCart();
   const router = useRouter();
   const [review, setReview] = useState<PaymentReview | null>(null);
   const [attempt, setAttempt] = useState<PaymentAttemptView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const lock = useRef(false);
+  const requestVersion = useRef(0);
   const publishAttempt = useCallback(
     (next: PaymentAttemptView | null) => {
       setAttempt(next);
@@ -58,7 +62,8 @@ export function PaymentCheckout({
     [onAttemptChange],
   );
   const load = useCallback(async () => {
-    if (!enabled) return;
+    if (!enabled || lock.current) return;
+    const version = ++requestVersion.current;
     setError(null);
     try {
       const result = paymentReviewSchema.parse(
@@ -68,10 +73,12 @@ export function PaymentCheckout({
           )
         ).review,
       );
+      if (version !== requestVersion.current || lock.current) return;
       setReview(result);
       publishAttempt(result.attempt);
       setAccepted(false);
     } catch (e) {
+      if (version !== requestVersion.current || lock.current) return;
       setError(e instanceof Error ? e.message : "Checkout is unavailable.");
     }
   }, [enabled, publishAttempt]);
@@ -92,6 +99,13 @@ export function PaymentCheckout({
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
+    if (!attempt || attempt.orderId) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void load();
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [attempt, load]);
+  useEffect(() => {
     if (attempt?.orderId) router.replace(`/orders/${attempt.orderId}`);
   }, [attempt?.orderId, router]);
   const snapshot = attempt?.snapshot ?? review?.snapshot;
@@ -104,9 +118,13 @@ export function PaymentCheckout({
   const expired = Boolean(
     attempt && new Date(attempt.expiresAt).getTime() <= now,
   );
+  const paymentCanOpen = Boolean(
+    attempt && !expired && ["creating", "open"].includes(attempt.status),
+  );
   const start = async () => {
     if (lock.current || !review?.reviewToken) return;
     lock.current = true;
+    requestVersion.current += 1;
     setBusy(true);
     setError(null);
     try {
@@ -130,8 +148,10 @@ export function PaymentCheckout({
     }
   };
   const cancel = async () => {
-    if (lock.current) return;
+    if (lock.current || confirming) return;
+    let cancelled = false;
     lock.current = true;
+    requestVersion.current += 1;
     setBusy(true);
     setError(null);
     try {
@@ -145,10 +165,18 @@ export function PaymentCheckout({
       const next = result.attempt
         ? paymentAttemptViewSchema.parse(result.attempt)
         : null;
-      publishAttempt(next);
-      if (!next || next.status === "expired") router.push("/checkout#delivery");
-      else if (next.orderId) router.replace(`/orders/${next.orderId}`);
-      else {
+      if (!next || next.status === "expired") {
+        cancelled = true;
+        publishAttempt(null);
+        setAccepted(false);
+        setReview(null);
+        setCheckoutLocked(false);
+        openCart("cart");
+      } else if (next.orderId) {
+        publishAttempt(next);
+        router.replace(`/orders/${next.orderId}`);
+      } else {
+        publishAttempt(next);
         setError(
           "Payment is still being resolved. Check payment status before changing this order.",
         );
@@ -160,6 +188,7 @@ export function PaymentCheckout({
     } finally {
       lock.current = false;
       setBusy(false);
+      if (cancelled) void load();
     }
   };
   if (!enabled) {
@@ -168,7 +197,7 @@ export function PaymentCheckout({
         compact
         tone="neutral"
         title="Confirm delivery before payment"
-        description="Choose a delivery date, verify the address, and confirm the delivery fee above. Your wallet options will then appear here."
+        description="Confirm your delivery address and fee above to pay by card, Apple Pay, or Google Pay."
       />
     );
   }
@@ -238,9 +267,9 @@ export function PaymentCheckout({
               </CartEditButton>
               <Link
                 className="underline underline-offset-4"
-                href={embedded ? "/checkout#delivery" : "/checkout/details"}
+                href={embedded ? "/checkout#contact" : "/checkout/details"}
               >
-                Edit delivery details
+                Edit contact & address
               </Link>
             </nav>
             {review?.blockers.length ? (
@@ -251,114 +280,232 @@ export function PaymentCheckout({
                 description={review.blockers.join(" ")}
               />
             ) : null}
-            {snapshot ? (
-              <section className="space-y-5">
-                <h2 className="font-display text-brand-strong text-2xl">
-                  One last check
-                </h2>
-                <p className="text-ink-soft text-sm leading-6">
-                  Cancellation deadline:{" "}
-                  <strong className="text-ink">
-                    {formatBusinessDateTime(snapshot.cancellationDeadline)}
-                  </strong>
-                  .
-                </p>
-                {review?.policies ? (
-                  <p className="text-brand flex flex-wrap gap-4 text-sm">
-                    <a
-                      href={review.policies.termsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
+            {snapshot && !review?.blockers.length ? (
+              <section
+                aria-labelledby="payment-review-heading"
+                className="border-border overflow-hidden border bg-white"
+              >
+                <div className="border-border flex flex-wrap items-start justify-between gap-4 border-b bg-[#faf6fa] px-4 py-4 sm:px-5">
+                  <div>
+                    <h2
+                      id="payment-review-heading"
+                      className="text-ink text-base font-extrabold"
                     >
-                      Terms
-                    </a>
-                    <a
-                      href={review.policies.privacyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      Privacy
-                    </a>
-                    <a
-                      href={review.policies.refundUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      Refund policy
-                    </a>
+                      Ready to pay
+                    </h2>
+                    <p className="text-ink-soft mt-1 text-xs leading-5">
+                      Final total, including delivery
+                    </p>
+                  </div>
+                  <p className="text-ink shrink-0 text-lg font-extrabold tabular-nums">
+                    {formatCents(snapshot.totalCents)} {snapshot.currency}
                   </p>
-                ) : null}
-                <label className="flex min-h-11 items-start gap-3 text-sm leading-6">
-                  <input
-                    type="checkbox"
-                    checked={accepted}
-                    onChange={(event) => setAccepted(event.target.checked)}
-                    className="accent-brand mt-1 size-5 shrink-0"
-                  />
-                  <span>
-                    {snapshot.testOnly
-                      ? "I understand this is a development payment and no real order will be placed."
-                      : "I have reviewed my order and agree to the checkout terms and refund policy."}
-                  </span>
-                </label>
-                <Button
-                  size="lg"
-                  className="w-full sm:w-auto"
-                  onClick={() => void start()}
-                  isLoading={busy}
-                  loadingLabel="Reserving your space…"
-                  disabled={
-                    !hydrated ||
-                    !accepted ||
-                    changed ||
-                    Boolean(review?.blockers.length)
-                  }
-                >
-                  Continue to secure payment
-                </Button>
-                <p className="text-ink-soft text-xs leading-5">
-                  Your delivery space is reserved for 15 minutes when payment
-                  starts. We accept Apple Pay and Google Pay.
-                </p>
+                </div>
+
+                <div className="space-y-5 px-4 py-5 sm:px-5">
+                  <div className="flex gap-3 text-sm leading-6">
+                    <Clock3
+                      className="text-brand mt-0.5 size-5 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <p>
+                      Cancel by{" "}
+                      <strong>
+                        {formatBusinessDateTime(snapshot.cancellationDeadline)}
+                      </strong>{" "}
+                      for a full refund to the original payment method.
+                    </p>
+                  </div>
+
+                  {review?.policies ? (
+                    <p className="text-brand flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                      <a
+                        href={review.policies.termsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        Terms
+                      </a>
+                      <a
+                        href={review.policies.privacyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        Privacy
+                      </a>
+                      <a
+                        href={review.policies.refundUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline underline-offset-4"
+                      >
+                        Refund policy
+                      </a>
+                    </p>
+                  ) : null}
+
+                  <label className="border-border flex min-h-11 items-start gap-3 border-t pt-4 text-sm leading-6">
+                    <input
+                      type="checkbox"
+                      checked={accepted}
+                      onChange={(event) => setAccepted(event.target.checked)}
+                      className="accent-brand mt-1 size-5 shrink-0"
+                    />
+                    <span>
+                      {snapshot.testOnly
+                        ? "I understand this is a development payment and no real order will be placed."
+                        : "I have reviewed my order and agree to the checkout terms and refund policy."}
+                    </span>
+                  </label>
+
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={() => void start()}
+                    isLoading={busy}
+                    loadingLabel="Reserving your delivery space…"
+                    disabled={!hydrated || !accepted || changed}
+                  >
+                    <LockKeyhole className="size-4" aria-hidden="true" />
+                    Continue to payment
+                  </Button>
+
+                  <ul className="text-ink-soft grid gap-2 text-xs leading-5 sm:grid-cols-2">
+                    <li className="flex gap-2">
+                      <ShieldCheck
+                        className="text-sage-ink mt-0.5 size-4 shrink-0"
+                        aria-hidden="true"
+                      />
+                      Pay by card, Apple Pay, or Google Pay.
+                    </li>
+                    <li className="flex gap-2">
+                      <Clock3
+                        className="text-brand mt-0.5 size-4 shrink-0"
+                        aria-hidden="true"
+                      />
+                      Your delivery space is held for 15 minutes after you
+                      continue.
+                    </li>
+                  </ul>
+                </div>
               </section>
             ) : null}
           </>
         ) : (
-          <section className="space-y-5">
-            <h2 className="font-display text-brand-strong text-2xl">
-              Pay securely
-            </h2>
-            <p className="text-ink-soft text-sm">
-              {expired
-                ? "The payment window has ended. Check the result before starting again."
-                : `Your space is reserved for ${Math.max(1, Math.ceil((new Date(attempt.expiresAt).getTime() - now) / 60000))} more minutes.`}
-            </p>
-            {!expired && attempt.clientSecret ? (
-              <WalletPayment
-                clientSecret={attempt.clientSecret}
-                expiresAt={attempt.expiresAt}
-              />
-            ) : null}
-            <Link
-              href="/checkout/confirmation"
-              className="text-brand inline-flex min-h-11 items-center text-sm font-bold underline underline-offset-4"
-            >
-              Check payment status
-            </Link>
-            <Button
-              variant="secondary"
-              onClick={() => void cancel()}
-              isLoading={busy}
-            >
-              Stop payment and edit order
-            </Button>
+          <section
+            aria-labelledby="wallet-payment-heading"
+            className="border-border overflow-hidden border bg-white"
+          >
+            <div className="border-border flex flex-wrap items-start justify-between gap-3 border-b bg-[#faf6fa] px-4 py-4 sm:px-5">
+              <div>
+                <h2
+                  id="wallet-payment-heading"
+                  className="text-ink text-base font-extrabold"
+                >
+                  Pay securely
+                </h2>
+                <p className="text-ink-soft mt-1 text-xs leading-5">
+                  {expired
+                    ? "The payment window has ended."
+                    : `Reserved for ${Math.max(1, Math.ceil((new Date(attempt.expiresAt).getTime() - now) / 60000))} more minutes.`}
+                </p>
+              </div>
+              <p className="text-ink text-lg font-extrabold tabular-nums">
+                {formatCents(attempt.snapshot.totalCents)} CAD
+              </p>
+            </div>
+
+            <div className="space-y-5 px-4 py-5 sm:px-5">
+              {paymentCanOpen && attempt.clientSecret && !busy ? (
+                <PaymentMethods
+                  key={attempt.id}
+                  clientSecret={attempt.clientSecret}
+                  expiresAt={attempt.expiresAt}
+                  totalCents={attempt.snapshot.totalCents}
+                  onProcessingChange={setConfirming}
+                />
+              ) : null}
+              {paymentCanOpen && !attempt.clientSecret ? (
+                <StatePanel
+                  compact
+                  tone="loading"
+                  title="Preparing secure payment"
+                  description="Your delivery space is protected while Stripe prepares your payment options."
+                />
+              ) : null}
+              {attempt.status === "processing" ||
+              (attempt.status === "paid" && !attempt.orderId) ? (
+                <StatePanel
+                  compact
+                  tone="loading"
+                  title="Confirming your payment"
+                  description="Do not pay again. We are waiting for Stripe’s verified result before creating the order."
+                />
+              ) : null}
+              {attempt.status === "needs_review" ? (
+                <StatePanel
+                  compact
+                  tone="error"
+                  title="Your payment needs a manual check"
+                  description="No order has been confirmed. Please check payment status and contact support before trying to pay again."
+                />
+              ) : null}
+              {attempt.status === "refund_pending" ? (
+                <StatePanel
+                  compact
+                  tone="neutral"
+                  title="Your full refund is being processed"
+                  description="This payment could not become an order. Do not pay again while the refund is being confirmed."
+                />
+              ) : null}
+              {attempt.status === "refunded" ? (
+                <StatePanel
+                  compact
+                  tone="success"
+                  title="Your full refund was issued"
+                  description="The money was returned to the original payment method. Your bank controls when it appears."
+                />
+              ) : null}
+              {expired && ["creating", "open"].includes(attempt.status) ? (
+                <StatePanel
+                  compact
+                  tone="neutral"
+                  title="The payment window has ended"
+                  description="Check the payment result before starting another attempt. Your pastry box remains saved."
+                />
+              ) : null}
+
+              <div className="grid gap-2 border-t border-[var(--border)] pt-4 sm:justify-items-start">
+                <Link
+                  href="/checkout/confirmation"
+                  className={buttonVariants({ variant: "secondary" })}
+                >
+                  Check payment status
+                </Link>
+                {["creating", "open"].includes(attempt.status) ? (
+                  <Button
+                    variant="quiet"
+                    onClick={() => void cancel()}
+                    isLoading={busy}
+                    disabled={confirming}
+                    loadingLabel="Checking payment…"
+                  >
+                    Stop payment and edit order
+                  </Button>
+                ) : null}
+              </div>
+            </div>
           </section>
         )}
-        <p className="text-ink-soft text-xs leading-5">
-          Your order is confirmed only after payment is verified.
+        <p className="text-ink-soft flex gap-2 text-xs leading-5">
+          <ShieldCheck
+            className="text-sage-ink mt-0.5 size-4 shrink-0"
+            aria-hidden="true"
+          />
+          Your order is confirmed only after Stripe verifies the payment. Suga
+          &amp; Spies never receives or stores your card number.
         </p>
       </div>
       {snapshot && !embedded ? <PurchaseSummary snapshot={snapshot} /> : null}

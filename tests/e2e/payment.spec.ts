@@ -79,7 +79,7 @@ async function hasNoSeriousAccessibilityViolations(
   ).toEqual([]);
 }
 
-test("wallet review is pastry-focused, responsive, and submission-safe", async ({
+test("payment review is pastry-focused, responsive, and submission-safe", async ({
   page,
 }, testInfo) => {
   const snapshot = purchaseFixture();
@@ -131,11 +131,19 @@ test("wallet review is pastry-focused, responsive, and submission-safe", async (
   expect(controlStyle.height).toBeGreaterThanOrEqual(44);
   expect(controlStyle.height).toBeLessThanOrEqual(48);
   expect(controlStyle.family).toContain("Lato");
+  for (const select of await page.locator(".checkout-form select").all()) {
+    expect(
+      await select.evaluate(
+        (element) => element.getBoundingClientRect().height,
+      ),
+    ).toBeGreaterThanOrEqual(44);
+  }
   if (testInfo.project.name === "webkit-mobile")
     expect(controlStyle.fontSize).toBeGreaterThanOrEqual(16);
   await page.screenshot({
     path: testInfo.outputPath("compact-checkout.png"),
     animations: "disabled",
+    fullPage: true,
   });
   if (testInfo.project.name === "webkit-mobile")
     await page.locator("summary").click();
@@ -144,7 +152,7 @@ test("wallet review is pastry-focused, responsive, and submission-safe", async (
   await expect(summary.getByText("4 × $2.50", { exact: true })).toBeVisible();
   await expect(summary.getByText("$15.00", { exact: true })).toBeVisible();
   const submit = page.getByRole("button", {
-    name: "Continue to secure payment",
+    name: "Continue to payment",
   });
   await expect(submit).toBeDisabled();
   await page.getByRole("checkbox").check();
@@ -209,6 +217,126 @@ test("a changed local cart blocks payment and sends the customer back for review
   await expect(
     page.getByRole("heading", { name: "Confirm delivery before payment" }),
   ).toBeVisible();
+});
+
+test("card entry remains available without wallets (Stripe SDK fixture)", async ({
+  page,
+}, testInfo) => {
+  const snapshot = purchaseFixture();
+  await page.addInitScript(
+    ([key, cart]) => {
+      localStorage.setItem(key, JSON.stringify(cart));
+      // Provider contract fixture: no charge or genuine card details are submitted.
+      Object.defineProperty(window, "Stripe", {
+        value: () => ({
+          initCheckoutElementsSdk: () => ({
+            loadActions: async () => ({
+              type: "success",
+              actions: {
+                confirm: async () => ({
+                  type: "error",
+                  error: { message: "Test card was declined." },
+                }),
+              },
+            }),
+            createExpressCheckoutElement: () => {
+              const handlers: Record<string, (event: unknown) => void> = {};
+              return {
+                on: (name: string, handler: (event: unknown) => void) => {
+                  handlers[name] = handler;
+                },
+                mount: () =>
+                  setTimeout(
+                    () =>
+                      handlers.ready?.({ availablePaymentMethods: undefined }),
+                    0,
+                  ),
+                destroy: () => {},
+              };
+            },
+            createPaymentElement: () => {
+              const handlers: Record<string, (event: unknown) => void> = {};
+              let frame: HTMLIFrameElement;
+              return {
+                on: (name: string, handler: (event: unknown) => void) => {
+                  handlers[name] = handler;
+                },
+                mount: (host: HTMLElement) => {
+                  frame = document.createElement("iframe");
+                  frame.title = "Secure card entry (test fixture)";
+                  frame.style.cssText =
+                    "width:100%;height:175px;border:0;display:block";
+                  frame.srcdoc =
+                    '<html lang="en"><head><title>Secure card form fixture</title><style>body{margin:0;font:14px Arial;color:#30252e}label{display:block;margin-bottom:8px}input{box-sizing:border-box;width:100%;height:44px;border:1px solid #d9cbd8;border-radius:6px;padding:10px;font-size:16px;margin-top:6px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}</style></head><body><label>Card number<input placeholder="1234 1234 1234 1234" autocomplete="cc-number"></label><div class="row"><label>Expiry date<input placeholder="MM / YY" autocomplete="cc-exp"></label><label>Security code<input placeholder="CVC" autocomplete="cc-csc"></label></div></body></html>';
+                  host.append(frame);
+                  setTimeout(() => handlers.ready?.({}), 0);
+                },
+                destroy: () => frame?.remove(),
+              };
+            },
+          }),
+        }),
+      });
+    },
+    [CART_KEY, snapshot.cart] as const,
+  );
+  await saveDeliveryDate(page, snapshot);
+  await mockCartValidation(page, snapshot);
+  await mockConfirmedDelivery(page, snapshot);
+  await page.route("**/api/checkout/payment", (route) =>
+    route.fulfill({
+      json: {
+        review: {
+          snapshot,
+          reviewToken: "a".repeat(64),
+          blockers: [],
+          policies: null,
+          attempt: {
+            id: attemptFixture().id,
+            status: "open",
+            expiresAt: new Date(Date.now() + 900_000).toISOString(),
+            orderId: null,
+            clientSecret: "cs_test_secret_fixture",
+            snapshot,
+          },
+        },
+      },
+    }),
+  );
+  await page.goto("/checkout");
+  const pay = page.getByRole("button", { name: "Pay $15.00 CAD" });
+  await expect(pay).toBeEnabled();
+  await expect(
+    page.getByRole("heading", { name: "Credit or debit card" }),
+  ).toBeVisible();
+  await expect(page.getByLabel(/^Full name/)).not.toBeVisible();
+  const frame = page.frameLocator(
+    'iframe[title="Secure card entry (test fixture)"]',
+  );
+  await frame.getByLabel("Card number").fill("4242424242424242");
+  await frame.getByLabel("Expiry date").fill("12 / 30");
+  await frame.getByLabel("Security code").fill("123");
+  await pay.click();
+  await expect(page.getByRole("alert")).toHaveText("Test card was declined.");
+  await expect(pay).toBeEnabled();
+  await page.screenshot({
+    path: testInfo.outputPath("card-checkout-sdk-fixture.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+  await hasNoSeriousAccessibilityViolations(page);
+  if (testInfo.project.name === "chromium-desktop") {
+    for (const width of [320, 390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+    }
+  }
 });
 
 test("an active payment locks drawer editing and preserves its purchase summary across cart refreshes", async ({
@@ -281,6 +409,83 @@ test("an active payment locks drawer editing and preserves its purchase summary 
     page.getByRole("button", { name: "Return to cart" }),
   ).toBeDisabled();
 });
+
+for (const outcome of ["expired", "processing"] as const) {
+  test(`stopping payment ${outcome === "expired" ? "opens the editable cart drawer" : "keeps an unresolved payment locked"}`, async ({
+    page,
+  }) => {
+    const snapshot = purchaseFixture();
+    const attempt = {
+      id: attemptFixture().id,
+      status: "open" as string,
+      expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      orderId: null,
+      clientSecret: null,
+      snapshot,
+    };
+    let stopped = false;
+    await page.addInitScript(
+      ([key, cart]) => localStorage.setItem(key, JSON.stringify(cart)),
+      [CART_KEY, snapshot.cart] as const,
+    );
+    await saveDeliveryDate(page, snapshot);
+    await mockCartValidation(page, snapshot);
+    await mockConfirmedDelivery(page, snapshot);
+    await page.route("**/api/checkout/payment", async (route) => {
+      if (route.request().method() === "DELETE") {
+        stopped = true;
+        attempt.status = outcome;
+        await route.fulfill({ json: { attempt } });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          review: {
+            snapshot,
+            reviewToken: "a".repeat(64),
+            blockers: [],
+            policies: null,
+            attempt: stopped && outcome === "expired" ? null : attempt,
+          },
+        },
+      });
+    });
+    await page.goto("/checkout");
+    await page
+      .getByRole("button", { name: "Stop payment and edit order" })
+      .click();
+    if (outcome === "expired") {
+      const drawer = page.getByRole("dialog", { name: "Your pastry box" });
+      await expect(drawer).toBeVisible();
+      await expect(
+        drawer.getByRole("button", { name: /Increase/ }),
+      ).toBeEnabled();
+      expect(new URL(page.url()).hash).toBe("");
+      await drawer.getByRole("button", { name: "Close cart" }).click();
+      await expect(
+        page.getByRole("button", { name: "Return to cart" }),
+      ).toBeEnabled();
+      await page.getByRole("link", { name: "Edit contact & address" }).click();
+      await expect(page).toHaveURL(/\/checkout#contact$/);
+      await expect(page.getByLabel(/^Full name/)).toBeEditable();
+      await page
+        .getByRole("button", { name: "Edit delivery date", exact: true })
+        .click();
+      await expect(page.getByRole("dialog")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: /Delivery date/, exact: false }),
+      ).toHaveAttribute("aria-current", "step");
+    } else {
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Return to cart" }),
+      ).toBeDisabled();
+      await expect(
+        page.getByText(/Payment is still being resolved/),
+      ).toBeVisible();
+    }
+  });
+}
 
 test("provider-confirmed order replaces processing, renders securely, and clears only its cart", async ({
   page,

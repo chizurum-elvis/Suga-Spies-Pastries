@@ -40,5 +40,9 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
+    // The browser server uses loopback HTTP. Mark it local at runtime so
+    // WebKit can store the checkout cookie; deployed staging/production use
+    // HTTPS and retain Secure cookies.
+    env: { ...process.env, APP_ENV: "local" },
   },
 });

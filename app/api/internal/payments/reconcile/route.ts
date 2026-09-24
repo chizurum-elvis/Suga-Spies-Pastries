@@ -1,23 +1,19 @@
-import { timingSafeEqual } from "node:crypto";
 import { getServerEnvironment } from "@/lib/env/server";
 import { createSecretSupabaseClient } from "@/lib/supabase/secret";
 import { reconcilePayment } from "@/lib/payments/processor";
 import { sendOrderNotifications } from "@/lib/payments/notifications";
+import { isAuthorizedPaymentWorker } from "@/lib/payments/worker-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-export async function POST(request: Request) {
+
+async function reconcilePayments(request: Request) {
   const env = getServerEnvironment();
-  const expected = env.PAYMENT_WORKER_SECRET
-    ? `Bearer ${env.PAYMENT_WORKER_SECRET}`
-    : "";
-  const supplied = request.headers.get("authorization") ?? "";
-  const expectedBytes = Buffer.from(expected);
-  const suppliedBytes = Buffer.from(supplied);
   if (
-    !expected ||
-    expectedBytes.length !== suppliedBytes.length ||
-    !timingSafeEqual(expectedBytes, suppliedBytes)
+    !isAuthorizedPaymentWorker(request.headers.get("authorization"), [
+      env.PAYMENT_WORKER_SECRET,
+      env.CRON_SECRET,
+    ])
   )
     return new Response("Unauthorized", { status: 401 });
   // Disabling new payments must not strand an already accepted payment.
@@ -91,4 +87,14 @@ export async function POST(request: Request) {
     { checked: due.data.length, failures, notifications },
     { headers: { "Cache-Control": "no-store" } },
   );
+}
+
+// Vercel Cron invokes routes with GET and sends CRON_SECRET as a Bearer token.
+export async function GET(request: Request) {
+  return reconcilePayments(request);
+}
+
+// The local worker and other authenticated schedulers use POST.
+export async function POST(request: Request) {
+  return reconcilePayments(request);
 }

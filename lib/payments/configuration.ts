@@ -9,6 +9,7 @@ type Configuration = {
   ORDER_ACCESS_SECRET?: string;
   CHECKOUT_POLICIES_JSON?: string;
   PAYMENT_WORKER_SECRET?: string;
+  CRON_SECRET?: string;
   RESEND_API_KEY?: string;
   ORDER_EMAIL_FROM?: string;
   ORDER_ALERT_EMAIL?: string;
@@ -34,7 +35,7 @@ export function paymentConfiguration(environment: Configuration) {
   if (
     !environment.STRIPE_WEBHOOK_SECRET ||
     !environment.ORDER_ACCESS_SECRET ||
-    !environment.PAYMENT_WORKER_SECRET
+    (!environment.PAYMENT_WORKER_SECRET && !environment.CRON_SECRET)
   )
     blockers.push("Payment confirmation is not connected yet.");
   if (!testOnly && environment.APP_ENV !== "production")

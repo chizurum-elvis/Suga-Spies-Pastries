@@ -173,7 +173,12 @@ function OrderSummary({
           </dd>
         </div>
         <div className="flex justify-between gap-4">
-          <dt className="text-ink-soft">Delivery</dt>
+          <dt className="text-ink-soft">
+            Delivery
+            <span className="text-ink-soft mt-0.5 block text-xs">
+              From your confirmed address
+            </span>
+          </dt>
           <dd className="text-right font-bold tabular-nums">
             {snapshot
               ? snapshot.deliveryCents === 0
@@ -284,9 +289,9 @@ export function CheckoutFlow({
         <div className="border-border border-t">{summary}</div>
       </details>
 
-      <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-10">
+      <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-10 xl:gap-14">
         <div className="min-w-0">
-          <section id="delivery" className="scroll-mt-8 pb-6">
+          <section id="contact" className="scroll-mt-8 pb-6">
             <StepHeading
               number="1"
               title="Contact & delivery information"
@@ -307,7 +312,7 @@ export function CheckoutFlow({
             <StepHeading
               number="2"
               title="Review & pay"
-              description="Pay with Apple Pay or Google Pay on a supported device."
+              description="Credit or debit card. Apple Pay and Google Pay when available."
               complete={Boolean(attempt?.orderId)}
             />
             <PaymentCheckout

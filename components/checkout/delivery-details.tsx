@@ -372,6 +372,42 @@ export function DeliveryDetails({
       </section>
     );
 
+  if (locked && embedded && delivery.input) {
+    return (
+      <div className="border-border border-y py-4">
+        <dl className="divide-border divide-y text-sm leading-6">
+          <div className="grid gap-1 pb-3 sm:grid-cols-[5rem_minmax(0,1fr)] sm:gap-4">
+            <dt className="text-ink-soft">Contact</dt>
+            <dd className="min-w-0 break-words">
+              <p>{delivery.input.name}</p>
+              <p>{delivery.input.email}</p>
+            </dd>
+          </div>
+          <div className="grid gap-1 pt-3 sm:grid-cols-[5rem_minmax(0,1fr)] sm:gap-4">
+            <dt className="text-ink-soft">Deliver to</dt>
+            <dd className="min-w-0 break-words">
+              <p>{delivery.input.recipientName}</p>
+              <p>
+                {delivery.input.address.line1}
+                {delivery.input.address.line2
+                  ? `, ${delivery.input.address.line2}`
+                  : ""}
+              </p>
+              <p>
+                {delivery.input.address.city}, {delivery.input.address.province}{" "}
+                {delivery.input.address.postalCode}
+              </p>
+            </dd>
+          </div>
+        </dl>
+        <p className="text-ink-soft mt-3 text-xs leading-5">
+          Need to change something? Stop payment below to edit your order
+          safely.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={

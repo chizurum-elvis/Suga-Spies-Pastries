@@ -50,6 +50,14 @@ describe("checkout security boundary", () => {
   });
   it("permits fully configured sandbox checkout", () =>
     expect(paymentConfiguration(ready).blockers).toEqual([]));
+  it("accepts a protected deployment cron instead of the local worker", () =>
+    expect(
+      paymentConfiguration({
+        ...ready,
+        PAYMENT_WORKER_SECRET: undefined,
+        CRON_SECRET: "c".repeat(64),
+      }).blockers,
+    ).toEqual([]));
   it("disables payments by explicit configuration", () =>
     expect(
       paymentConfiguration({ ...ready, PAYMENTS_MODE: "disabled" }).blockers

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LegacyDetailsPage() {
-  redirect("/checkout#delivery");
+  redirect("/checkout#contact");
 }

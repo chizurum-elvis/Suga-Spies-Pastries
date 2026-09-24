@@ -56,7 +56,12 @@ export function PurchaseSummary({ snapshot }: { snapshot: PurchaseSnapshot }) {
           <dd>{formatCurrency(snapshot.subtotalCents / 100)}</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt>Delivery</dt>
+          <dt>
+            Delivery
+            <span className="text-ink-faint mt-0.5 block text-xs font-normal">
+              From your confirmed address
+            </span>
+          </dt>
           <dd>
             {snapshot.deliveryCents
               ? formatCurrency(snapshot.deliveryCents / 100)

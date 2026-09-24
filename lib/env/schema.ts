@@ -119,6 +119,10 @@ export const serverEnvironmentSchema = z
       emptyStringToUndefined,
       z.string().min(32).max(256).optional(),
     ),
+    CRON_SECRET: z.preprocess(
+      emptyStringToUndefined,
+      z.string().min(32).max(256).optional(),
+    ),
     RESEND_API_KEY: optionalPrefixedString("re_", "Resend API key"),
     ORDER_EMAIL_FROM: z.preprocess(
       emptyStringToUndefined,

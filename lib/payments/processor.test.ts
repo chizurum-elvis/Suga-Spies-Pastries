@@ -46,7 +46,10 @@ beforeEach(() => {
     metadata: { payment_attempt_id: attempt.id },
     latest_charge: {
       created: Math.floor(Date.now() / 1000) - 10,
-      payment_method_details: { card: { wallet: { type: "apple_pay" } } },
+      payment_method_details: {
+        type: "card",
+        card: { wallet: { type: "apple_pay" } },
+      },
     },
   });
   mocks.rpc.mockResolvedValue({ data: "order-id", error: null });
@@ -68,27 +71,47 @@ describe("verified provider reconciliation", () => {
       );
     },
   );
-  it.each(["ordinary_card", "late_wallet", "capacity_released"])(
-    "compensates %s without creating an order",
-    async (scenario) => {
-      const intent = await mocks.intent();
-      if (scenario === "ordinary_card")
-        intent.latest_charge.payment_method_details.card.wallet = null;
-      if (scenario === "late_wallet")
-        intent.latest_charge.created = Math.floor(Date.now() / 1000) + 1000;
-      mocks.rpc.mockResolvedValue({ data: null, error: null });
-      mocks.refund.mockResolvedValue({ id: "re_test", status: "succeeded" });
-      await reconcilePayment(attemptFixture());
-      expect(mocks.refund).toHaveBeenCalledWith(
-        expect.objectContaining({ payment_intent: "pi_test", amount: 1500 }),
-        { idempotencyKey: `compensation:${attemptFixture().id}` },
-      );
-      expect(mocks.rpc).toHaveBeenLastCalledWith(
-        "resolve_wallet_payment",
-        expect.objectContaining({ p_action: "refunded" }),
-      );
-    },
-  );
+  it("accepts a verified ordinary card payment without refunding it", async () => {
+    const intent = await mocks.intent();
+    intent.latest_charge.payment_method_details.card.wallet = null;
+    await reconcilePayment(attemptFixture());
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "resolve_wallet_payment",
+      expect.objectContaining({ p_action: "paid" }),
+    );
+    expect(mocks.refund).not.toHaveBeenCalled();
+  });
+  it.each([
+    "unsupported_wallet",
+    "non_card",
+    "missing_details",
+    "late_wallet",
+    "late_card",
+    "capacity_released",
+  ])("compensates %s without creating an order", async (scenario) => {
+    const intent = await mocks.intent();
+    if (scenario === "unsupported_wallet")
+      intent.latest_charge.payment_method_details.card.wallet.type = "link";
+    if (scenario === "non_card")
+      intent.latest_charge.payment_method_details.type = "klarna";
+    if (scenario === "missing_details")
+      intent.latest_charge.payment_method_details = null;
+    if (scenario === "late_card")
+      intent.latest_charge.payment_method_details.card.wallet = null;
+    if (scenario === "late_wallet" || scenario === "late_card")
+      intent.latest_charge.created = Math.floor(Date.now() / 1000) + 1000;
+    mocks.rpc.mockResolvedValue({ data: null, error: null });
+    mocks.refund.mockResolvedValue({ id: "re_test", status: "succeeded" });
+    await reconcilePayment(attemptFixture());
+    expect(mocks.refund).toHaveBeenCalledWith(
+      expect.objectContaining({ payment_intent: "pi_test", amount: 1500 }),
+      { idempotencyKey: `compensation:${attemptFixture().id}` },
+    );
+    expect(mocks.rpc).toHaveBeenLastCalledWith(
+      "resolve_wallet_payment",
+      expect.objectContaining({ p_action: "refunded" }),
+    );
+  });
   it("reuses a pending refund instead of issuing another", async () => {
     mocks.rpc.mockResolvedValue({ data: null, error: null });
     mocks.refundRetrieve.mockResolvedValue({

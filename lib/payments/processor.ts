@@ -118,12 +118,16 @@ export async function reconcilePayment(
     }
     const charge =
       typeof intent.latest_charge === "object" ? intent.latest_charge : null;
-    const wallet = charge?.payment_method_details?.card?.wallet?.type;
-    const allowedWallet = wallet === "apple_pay" || wallet === "google_pay";
+    const details = charge?.payment_method_details;
+    const wallet = details?.card?.wallet;
+    const allowedCard =
+      details?.type === "card" &&
+      Boolean(details.card) &&
+      (!wallet || wallet.type === "apple_pay" || wallet.type === "google_pay");
     const withinDeadline =
       typeof charge?.created === "number" &&
       charge.created * 1000 < new Date(attempt.expires_at).getTime();
-    const accepted = allowedWallet && withinDeadline;
+    const accepted = allowedCard && withinDeadline;
     const orderId = await resolve(
       attempt,
       accepted && attempt.status !== "refund_pending"
