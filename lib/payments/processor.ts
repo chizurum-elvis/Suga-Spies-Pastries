@@ -71,7 +71,38 @@ export async function reconcilePayment(
   if (["paid", "expired", "refunded"].includes(attempt.status) && !eventId)
     return;
   const stripe = stripeClient();
-  let session = await ensurePaymentSession(attempt);
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await ensurePaymentSession(attempt);
+  } catch (error) {
+    const missingTestSession =
+      attempt.test_only &&
+      new Date(attempt.expires_at).getTime() <= Date.now() &&
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "resource_missing";
+    // Test sessions can disappear after a sandbox or test-key replacement.
+    // They cannot contain real funds, so an already-ended test hold is safe
+    // to release. Live attempts remain fail-closed for owner review.
+    if (missingTestSession && attempt.stripe_session_id) {
+      await resolve(
+        attempt,
+        "expired",
+        eventId ?? `missing-test-session:${attempt.id}`,
+        attempt.stripe_session_id,
+      );
+      const cleared = await createSecretSupabaseClient()
+        .from("payment_attempts")
+        .update({ failure_code: null })
+        .eq("id", attempt.id)
+        .eq("status", "expired");
+      if (cleared.error)
+        throw new Error("Recovered test payment could not be finalized.");
+      return;
+    }
+    throw error;
+  }
   if (
     session.client_reference_id !== attempt.id ||
     session.metadata?.payment_attempt_id !== attempt.id ||

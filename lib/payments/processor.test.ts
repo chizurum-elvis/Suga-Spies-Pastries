@@ -193,6 +193,37 @@ describe("verified provider reconciliation", () => {
     await expect(reconcilePayment(attemptFixture())).rejects.toThrow();
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
+  it("releases an ended test hold when its old sandbox session is gone", async () => {
+    mocks.retrieve.mockRejectedValue(
+      Object.assign(new Error("No such checkout session"), {
+        code: "resource_missing",
+      }),
+    );
+    await reconcilePayment({
+      ...attemptFixture(),
+      expires_at: new Date(Date.now() - 1_000).toISOString(),
+    });
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      "resolve_wallet_payment",
+      expect.objectContaining({ p_action: "expired" }),
+    );
+    expect(mocks.update).toHaveBeenCalledWith({ failure_code: null });
+  });
+  it("never releases a live hold when its provider session cannot be found", async () => {
+    mocks.retrieve.mockRejectedValue(
+      Object.assign(new Error("No such checkout session"), {
+        code: "resource_missing",
+      }),
+    );
+    await expect(
+      reconcilePayment({
+        ...attemptFixture(),
+        test_only: false,
+        expires_at: new Date(Date.now() - 1_000).toISOString(),
+      }),
+    ).rejects.toThrow("No such checkout session");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
   it("expires at the provider before releasing capacity", async () => {
     const session = await mocks.retrieve();
     mocks.retrieve.mockResolvedValue({

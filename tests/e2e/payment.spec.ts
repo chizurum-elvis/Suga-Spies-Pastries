@@ -317,7 +317,9 @@ test("card entry remains available without wallets (Stripe SDK fixture)", async 
   await frame.getByLabel("Expiry date").fill("12 / 30");
   await frame.getByLabel("Security code").fill("123");
   await pay.click();
-  await expect(page.getByRole("alert")).toHaveText("Test card was declined.");
+  await expect(
+    page.getByRole("region", { name: "Payment methods" }).getByRole("alert"),
+  ).toHaveText("Test card was declined.");
   await expect(pay).toBeEnabled();
   await page.screenshot({
     path: testInfo.outputPath("card-checkout-sdk-fixture.png"),
