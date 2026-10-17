@@ -5,6 +5,11 @@ Order emails and account emails are separate integrations. Updating
 
 ## 1. Verify a domain in Resend
 
+The current website address, `suga-spies-pastries.vercel.app`, is a shared Vercel
+subdomain, not an owned email domain. It cannot replace `resend.dev` as the
+bakery's verified sender. Buy a domain you control first; the existing website
+can stay on Vercel while email verification is configured.
+
 1. Buy a domain you control. You cannot verify `gmail.com`, `outlook.com`,
    `vercel.app`, or another company's shared domain as your own.
 2. In Resend, open **Domains → Add domain**. Use your own domain or a sending

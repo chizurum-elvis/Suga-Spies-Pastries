@@ -75,11 +75,38 @@ settings, prices, or public content. Screenshots are private local test artifact
 - Large registry downloads timed out in this execution environment. The local
   framework was recovered from its original checksum-verified cache (16.3.3),
   without changing the patched manifest/lockfile. A clean `npm ci` is required
-  to install the patched framework locally. The clean patched build must pass
-  the GitHub/Vercel release checks before production sign-off; the earlier local
-  production build used 16.3.3.
+  to install the patched framework locally. GitHub release run `39049482768`
+  subsequently passed the clean patched build and all 20 browser smoke tests,
+  and Vercel successfully deployed commit `f6482f8`. The earlier local production
+  build used 16.3.3; this is not a claim that the local install is patched.
 - The free Vercel daily cron, owner account, provider billing, and payment mode
-  were not changed. A separate timely scheduler still needs approval/setup.
+  were not changed. The owner subsequently authorized a free Supabase scheduler;
+  its implementation and activation procedure are in `payment-recovery-scheduler.md`.
   Business-domain verification, actual inbox delivery, owner content completion,
   and the deferred owner/MFA/load acceptance remain launch setup, not completed
   merely because the admin code is published.
+
+## Authorized scheduler and deployed verification — October 17, 2026
+
+- Added a free every-minute Supabase Cron dispatcher with the existing Vercel
+  daily job retained. The migration creates it inactive; the Vault credential
+  and deployed signed-request support must be verified before activation.
+- Discovered the hosted pg_net queue's platform-managed broad permissions during
+  rollback-only security testing. The final design never queues the reusable
+  worker credential: it sends a method/action-bound HMAC that expires after 60
+  seconds. The dispatcher and its bounded state remain private.
+- Moved the phone/Instagram order implementations to private, owner-guarded
+  functions behind invoker API wrappers. The order workflow and hard four-order
+  capacity remain unchanged. The updated external-order suite passed 25 assertions;
+  the scheduler suite passed 32 assertions inside rollback transactions.
+- 605 unit/component tests and 12 release-tool tests passed; lint, TypeScript,
+  formatting and the targeted release scan passed. Existing Bearer-based Vercel
+  and local development worker authentication remains supported.
+- Read-only acceptance against deployed `f6482f8` passed in desktop Chromium
+  and mobile WebKit, including all seven owner sections and FAQ editing at eight
+  responsive widths. Remote navigation assertions wait for document content and
+  check HTTP 200 rather than depending on unrelated lazy-image load events.
+- `suga-spies-pastries.vercel.app` is not an owned Resend sending domain. Business
+  email and actual inbox delivery still require an owned domain. Vercel Hobby's
+  commercial-use restriction also needs resolution before real orders; no paid
+  hosting/billing change was made.

@@ -35,18 +35,26 @@ production sign-off. No paid monitoring service is enabled by this release.
 
 ## The free-hosting scheduling constraint
 
+Vercel Hobby is restricted to non-commercial personal use. It can host the current
+development/testing deployment, but the bakery must use hosting that permits
+commercial use before taking real orders. Adding a free scheduler does not change
+the hosting terms. No hosting plan or billing setting was changed here.
+[Vercel Hobby policy](https://vercel.com/docs/plans/hobby).
+
 `vercel.json` retains the once-daily Hobby-compatible call. Checkout still fails
 closed when the payment worker's last successful check is three minutes old.
 Do not increase that tolerance to a day to hide a warning: confirmations,
 capacity recovery, queued stage emails, and failed-delivery deadlines need timely
 processing even after a customer closes the browser.
 
-A separately authorized scheduler can call the protected reconciliation endpoint
-every minute without changing the Vercel plan. Check the project's actual
-Supabase Cron/pg_net/Vault support and provider quotas before configuring it. Do
-not put a Bearer secret directly in a public SQL migration or cron command. The
-development command `npm run payments:worker` is useful for tests, not an always-on
-production service.
+The owner has authorized free Supabase scheduling. The `suga-payment-recovery`
+Cron job calls the existing reconciliation endpoint every minute using pg_net.
+New databases receive the job **inactive** until their Vault credential is set
+and the matching application is deployed. See `payment-recovery-scheduler.md`
+for activation, rotation and verification. No plan upgrade is required for this
+job; normal Supabase/Vercel free-tier usage limits still apply. The daily Vercel
+job remains a fallback. The development command `npm run payments:worker` is
+useful for tests, not an always-on production service.
 
 ## Repeatable release checks
 

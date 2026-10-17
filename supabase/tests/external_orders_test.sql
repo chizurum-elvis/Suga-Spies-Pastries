@@ -4,6 +4,15 @@ set local search_path = public, extensions;
 create temporary table external_order_tap(line text);
 grant all on external_order_tap to authenticated, anon;
 insert into external_order_tap select no_plan();
+insert into external_order_tap select ok(not p.prosecdef,'public '||p.proname||' is an invoker wrapper')
+  from pg_proc p where p.oid in (
+    'public.create_external_order(date,text,text,text,text,text,text,text,text,text,text,jsonb,text)'::regprocedure,
+    'public.advance_external_order(uuid,integer,text)'::regprocedure);
+insert into external_order_tap select ok(not has_function_privilege('anon',p.oid,'execute'),
+  'anonymous cannot invoke private '||p.proname)
+  from pg_proc p where p.oid in (
+    'private.create_external_order(date,text,text,text,text,text,text,text,text,text,text,jsonb,text)'::regprocedure,
+    'private.advance_external_order(uuid,integer,text)'::regprocedure);
 
 insert into auth.users(id,email) values
   ('98400000-0000-4000-8000-000000000001','external-owner@example.com'),
@@ -47,6 +56,18 @@ insert into external_order_tap select throws_ok($q$
     '+14165550100',null,'Test Recipient','100 Queen Street West',null,'Toronto','M5H 2N1',null,
     '[{"productId":"98400000-0000-4000-8000-000000000004","quantity":4}]',null)
 $q$,'42501','owner_required','non-owner cannot create an external order');
+reset role;
+
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"98400000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+insert into external_order_tap select throws_ok($q$
+  select private.create_external_order((select day from external_order_date),'phone','Test Customer',
+    '+14165550100',null,'Test Recipient','100 Queen Street West',null,'Toronto','M5H 2N1',null,
+    '[{"productId":"98400000-0000-4000-8000-000000000004","quantity":4}]',null)
+$q$,'42501','owner_required','calling the private implementation cannot bypass owner authorization');
+insert into external_order_tap select throws_ok($q$
+  select private.advance_external_order(gen_random_uuid(),1,'preparing')
+$q$,'42501','owner_required','private stage transition still requires an active owner');
 reset role;
 
 set local role authenticated;

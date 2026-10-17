@@ -16,7 +16,17 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
   context,
 }, testInfo) => {
   test.setTimeout(360_000);
-  page.setDefaultNavigationTimeout(30_000);
+  page.setDefaultNavigationTimeout(45_000);
+  // Wait for the document and assert the actual UI separately, without tying
+  // acceptance to image load events on a remote deployment.
+  const navigate = async (path: string) => {
+    const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+    // Do not log search queries: they can contain private customer information.
+    expect(
+      response?.status(),
+      new URL(path, "https://example.com").pathname,
+    ).toBe(200);
+  };
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const publicKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const secretKey = process.env.SUPABASE_SECRET_KEY;
@@ -95,7 +105,7 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
 
     for (const width of [320, 1024, 1440]) {
       await page.setViewportSize({ width, height: 800 });
-      await page.goto("/admin");
+      await navigate("/admin");
       const mobile = width < 1024;
       if (mobile) {
         const trigger = page.getByRole("button", {
@@ -177,7 +187,7 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
     }
 
     await page.setViewportSize({ width: 1024, height: 420 });
-    await page.goto("/admin");
+    await navigate("/admin");
     const contentLink = page.getByRole("link", {
       name: "Website content",
       exact: true,
@@ -212,7 +222,7 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
     page.on("pageerror", (error) => runtimeErrors.push(error.message));
     for (const section of sections) {
       console.info(`Inspecting ${section.path}`);
-      await page.goto(section.path);
+      await navigate(section.path);
       for (const width of [320, 360, 390, 768, 1024, 1280, 1440, 1920]) {
         await page.setViewportSize({ width, height: 900 });
         await expect(
@@ -244,7 +254,7 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
         }
       }
     }
-    await page.goto("/admin/menu/new");
+    await navigate("/admin/menu/new");
     expect(
       await page
         .getByRole("button", { name: "Create draft", exact: true })
@@ -282,7 +292,7 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
         reference.data.contact_email,
         reference.data.contact_phone,
       ]) {
-        await page.goto(
+        await navigate(
           `/admin/orders?mode=test&q=${encodeURIComponent(query)}`,
         );
         await expect(
@@ -294,7 +304,7 @@ test("website content and FAQ editing are discoverable at every admin breakpoint
         ).toBeVisible({ timeout: 20_000 });
       }
     }
-    await page.goto("/admin/orders?mode=test");
+    await navigate("/admin/orders?mode=test");
     const firstOrder = page
       .getByRole("list", { name: "Paid pastry orders" })
       .getByRole("link")

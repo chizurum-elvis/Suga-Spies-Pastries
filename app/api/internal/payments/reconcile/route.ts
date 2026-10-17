@@ -15,10 +15,11 @@ export const maxDuration = 60;
 async function reconcilePayments(request: Request) {
   const env = getServerEnvironment();
   if (
-    !isAuthorizedPaymentWorker(request.headers.get("authorization"), [
-      env.PAYMENT_WORKER_SECRET,
-      env.CRON_SECRET,
-    ])
+    !isAuthorizedPaymentWorker(
+      request.headers.get("authorization"),
+      [env.PAYMENT_WORKER_SECRET, env.CRON_SECRET],
+      request.method,
+    )
   )
     return new Response("Unauthorized", { status: 401 });
   // Disabling new payments must not strand an already accepted payment.

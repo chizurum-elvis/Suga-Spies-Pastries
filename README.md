@@ -36,6 +36,7 @@ Install the Playwright browsers once with `npx playwright install` before runnin
 - [Owner acceptance checklist](docs/admin-workspace-completion.md)
 - [Business email and password-recovery setup](docs/production-email-setup.md)
 - [Failure handling, release checks, scheduling, and recovery](docs/admin-operations-and-release.md)
+- [Supabase recovery scheduler, private credentials, and verification](docs/payment-recovery-scheduler.md)
 
 GitHub runs credential-free release checks. Connected database/checkout tests,
 approved owner acceptance, real card/wallet testing, and visual review remain
