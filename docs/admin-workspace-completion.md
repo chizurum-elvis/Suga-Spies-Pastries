@@ -110,3 +110,27 @@ settings, prices, or public content. Screenshots are private local test artifact
   email and actual inbox delivery still require an owned domain. Vercel Hobby's
   commercial-use restriction also needs resolution before real orders; no paid
   hosting/billing change was made.
+
+### Deployment and activation receipt
+
+- Commit `8299cab` was pushed to `main` and successfully deployed by Vercel.
+  GitHub release run `39052996750` completed successfully, including a clean
+  patched-framework install/build and the credential-free browser tests.
+- All 25 migration history entries match locally and on the linked project.
+  All 20 rollback-only database/RLS suites passed after the two new migrations.
+- Confirmed `net` is excluded from the public Data API (PGRST106). The existing
+  worker credential was stored in Vault without committing it, saving it to a
+  local file, passing it as a process argument or printing it. The existing
+  `suga-payment-recovery` job is active with the every-minute schedule.
+- Automatic dispatches at 17:21 and 17:23 UTC returned HTTP 200, no timeout and
+  zero worker failures; their test-mode heartbeats advanced accordingly. The
+  deployed endpoint returned 401 for missing, expired, tampered and wrong-method
+  signatures and 200 for a current correctly signed POST.
+- No live payment mode, charges, pending-message fixtures, paid scheduler,
+  hosting upgrade, business-domain verification or customer email was enabled.
+- The post-migration security advisor no longer reports exposed privileged
+  external-order functions. The remaining leaked-password-protection warning
+  belongs to the explicitly deferred Auth/account security setup. Independent
+  outage alerting, a chosen encrypted backup destination/restore test, real
+  business sending-domain/inbox acceptance and the deferred owner/load/payment
+  acceptance are not certified by this deployment.
