@@ -1,5 +1,82 @@
 @import "tailwindcss";
 
+/* Owner tools are deliberately quieter and denser than the storefront. */
+.admin-workspace {
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --border: #e6e3e8;
+  --canvas-strong: #f5f3f7;
+  --ink-faint: #6f5f69;
+  font-size: 0.875rem;
+}
+.admin-workspace :is(h1, h2, h3, h4) {
+  font-family: var(--font-sans);
+}
+.admin-workspace .rounded-lg {
+  border-radius: 0.625rem;
+}
+.admin-workspace .rounded-md {
+  border-radius: 0.375rem;
+}
+.admin-workspace .shadow-soft {
+  box-shadow: none;
+}
+.admin-workspace .bg-brand {
+  box-shadow: none;
+}
+.admin-workspace h1 {
+  font-size: clamp(1.5rem, 2vw, 1.875rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+.admin-workspace h2 {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+.admin-workspace h3 {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.admin-workspace
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.admin-workspace select {
+  min-height: 2.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+.admin-workspace textarea {
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+.admin-workspace :where(input, select, textarea, button) {
+  max-width: 100%;
+}
+.admin-workspace :where(p, dd, a) {
+  overflow-wrap: anywhere;
+}
+@media print {
+  .admin-chrome,
+  .admin-workspace form,
+  .admin-workspace button {
+    display: none !important;
+  }
+  .admin-workspace main {
+    padding: 0 !important;
+  }
+  .admin-workspace {
+    background: white;
+    color: black;
+  }
+  .admin-workspace section,
+  .admin-workspace li {
+    break-inside: avoid;
+  }
+}
+
 :root {
   color-scheme: light;
 

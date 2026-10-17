@@ -93,6 +93,9 @@ export function OrderStatusControl({
         ) : null}
         <p className="text-ink-soft text-sm leading-6">
           {next.summary} Status history cannot be edited after it is recorded.
+          {nextStatus === "preparing"
+            ? " Starting preparation ends cancellation eligibility."
+            : ""}
         </p>
         <div className="border-border flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
           <ModalClose asChild>

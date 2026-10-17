@@ -17,7 +17,8 @@ type BlackoutScope = FulfillmentMethod;
 type CheckoutDraftStatus =
   "selecting" | "ready_for_details" | "ready_for_payment" | "expired";
 type CapacityStatus = "active" | "released";
-type CapacitySource = "phone" | "instagram" | "admin" | "other" | "website";
+type CapacitySource =
+  "phone" | "instagram" | "admin" | "other" | "website" | "redelivery";
 type CapacityHoldStatus = "active" | "expired" | "released" | "consumed";
 
 type DeliverySettingsRow = {
@@ -45,6 +46,176 @@ type DeliveryDetailsRow = {
 export type Database = {
   public: {
     Tables: PaymentTables & {
+      business_settings: {
+        Row: {
+          singleton: boolean;
+          accepting_orders: boolean;
+          pause_message: string;
+          owner_alert_email: string | null;
+          version: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: never;
+        Update: {
+          accepting_orders?: boolean;
+          pause_message?: string;
+          owner_alert_email?: string | null;
+        };
+        Relationships: [];
+      };
+      business_settings_history: {
+        Row: {
+          version: number;
+          accepting_orders: boolean;
+          pause_message: string;
+          owner_alert_email: string | null;
+          changed_by: string | null;
+          changed_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      site_content_drafts: {
+        Row: {
+          key: "home" | "contact" | "faq" | "terms" | "privacy" | "refund";
+          body: Json;
+          version: number;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: never;
+        Update: {
+          body?: Json;
+          version?: number;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
+      site_content_publications: {
+        Row: {
+          key: "home" | "contact" | "faq" | "terms" | "privacy" | "refund";
+          version: number;
+          body: Json;
+          is_current: boolean;
+          published_at: string;
+          published_by: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      external_order_events: {
+        Row: {
+          id: number;
+          external_order_id: string;
+          version: number;
+          from_status: string | null;
+          to_status: string;
+          actor_user_id: string;
+          occurred_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      external_orders: {
+        Row: {
+          id: string;
+          order_number: string;
+          capacity_adjustment_id: string;
+          fulfillment_date: string;
+          source: "phone" | "instagram" | "admin" | "other";
+          customer_name: string;
+          customer_phone: string;
+          customer_email: string | null;
+          recipient_name: string;
+          address_line1: string;
+          address_line2: string | null;
+          city: "Toronto" | "Markham" | "Mississauga";
+          postal_code: string;
+          delivery_instructions: string | null;
+          items: Json;
+          fulfillment_status:
+            | "received"
+            | "preparing"
+            | "ready"
+            | "out_for_delivery"
+            | "delivered"
+            | "cancelled";
+          payment_status: "unverified";
+          version: number;
+          internal_note: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      customer_order_links: {
+        Row: {
+          order_id: string;
+          user_id: string;
+          order_placed_at: string;
+          linked_at: string;
+        };
+        Insert: {
+          order_id: string;
+          user_id: string;
+          order_placed_at: string;
+          linked_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      customer_profiles: {
+        Row: {
+          user_id: string;
+          full_name: string;
+          phone: string;
+          recipient_name: string;
+          address_line1: string;
+          address_line2: string;
+          city: "Toronto" | "Markham" | "Mississauga";
+          province: "ON";
+          postal_code: string;
+          country: "CA";
+          delivery_instructions: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          full_name: string;
+          phone: string;
+          recipient_name: string;
+          address_line1: string;
+          address_line2?: string;
+          city: "Toronto" | "Markham" | "Mississauga";
+          province?: "ON";
+          postal_code: string;
+          country?: "CA";
+          delivery_instructions?: string;
+          updated_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          phone?: string;
+          recipient_name?: string;
+          address_line1?: string;
+          address_line2?: string;
+          city?: "Toronto" | "Markham" | "Mississauga";
+          province?: "ON";
+          postal_code?: string;
+          country?: "CA";
+          delivery_instructions?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       delivery_settings: {
         Row: DeliverySettingsRow;
         Insert: Partial<DeliverySettingsRow> & { origin_address: string };
@@ -754,8 +925,48 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      admin_order_index: {
+        Row: PaymentTables["orders"]["Row"] & {
+          delivery_date: string;
+          contact_name: string;
+          contact_email: string;
+          contact_phone: string;
+        };
+        Relationships: [];
+      };
+    };
     Functions: PaymentFunctions & {
+      owner_sales_summary: {
+        Args: { p_from: string; p_to: string; p_test: boolean };
+        Returns: Json;
+      };
+      publish_site_content: {
+        Args: { p_key: string; p_version: number };
+        Returns: number;
+      };
+      create_external_order: {
+        Args: {
+          p_date: string;
+          p_source: string;
+          p_customer_name: string;
+          p_customer_phone: string;
+          p_customer_email: string | null;
+          p_recipient_name: string;
+          p_address_line1: string;
+          p_address_line2: string | null;
+          p_city: string;
+          p_postal_code: string;
+          p_delivery_instructions: string | null;
+          p_items: Json;
+          p_internal_note: string | null;
+        };
+        Returns: string;
+      };
+      advance_external_order: {
+        Args: { p_id: string; p_version: number; p_next_status: string };
+        Returns: boolean;
+      };
       mutate_delivery_details: {
         Args: {
           p_draft_id: string;

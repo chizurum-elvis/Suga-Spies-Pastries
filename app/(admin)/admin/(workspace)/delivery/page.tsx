@@ -1,5 +1,6 @@
 import { DeliveryPricingForm } from "@/components/admin/delivery-pricing-form";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 
 export default async function DeliveryPricingPage() {
   const db = await createServerSupabaseClient();
@@ -15,6 +16,12 @@ export default async function DeliveryPricingPage() {
   return (
     <div className="grid gap-8">
       <header>
+        <Link
+          href="/admin/settings"
+          className="text-brand-strong mb-4 inline-flex min-h-11 items-center font-bold underline"
+        >
+          ← Settings
+        </Link>
         <h1 className="text-3xl font-extrabold">Delivery pricing</h1>
         <p className="text-ink-soft mt-3 max-w-2xl text-sm leading-6">
           Manage the current rates for Toronto, Markham, and Mississauga.

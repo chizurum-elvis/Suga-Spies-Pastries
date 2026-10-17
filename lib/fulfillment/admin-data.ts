@@ -6,6 +6,7 @@ import {
   formatLocalDateLabel,
   getTorontoLocalDate,
 } from "@/lib/fulfillment/rules";
+import { adminCalendarStatus } from "@/lib/admin/calendar-status";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AdminBlackout = {
@@ -22,9 +23,10 @@ export type AdminCapacityAdjustment = {
   id: string;
   date: string;
   dateLabel: string;
-  source: "phone" | "instagram" | "admin" | "other" | "website";
+  source: "phone" | "instagram" | "admin" | "other" | "website" | "redelivery";
   customerReference: string | null;
   internalNote: string | null;
+  trackedOrderId: string | null;
 };
 
 export type AdminCapacityDay = {
@@ -36,6 +38,8 @@ export type AdminCapacityDay = {
   consumed: number;
   remaining: number;
   blackoutCount: number;
+  closure: string | null;
+  customerBookable: boolean;
 };
 
 function requireData<T>(data: T | null, error: { message: string } | null): T {
@@ -44,7 +48,10 @@ function requireData<T>(data: T | null, error: { message: string } | null): T {
   return data;
 }
 
-export async function getAdminFulfillmentData(now: Date = new Date()) {
+export async function getAdminFulfillmentData(
+  now: Date = new Date(),
+  requestedStart?: string,
+) {
   const today = getTorontoLocalDate(now);
   const maximumDate = addCalendarMonths(today, 2);
   const supabase = await createServerSupabaseClient();
@@ -54,6 +61,7 @@ export async function getAdminFulfillmentData(now: Date = new Date()) {
     blackoutsResult,
     adjustmentsResult,
     holdsResult,
+    trackedExternalResult,
   ] = await Promise.all([
     supabase
       .from("fulfillment_settings")
@@ -86,6 +94,11 @@ export async function getAdminFulfillmentData(now: Date = new Date()) {
       .or(`expires_at.gt.${now.toISOString()},payment_pending.eq.true`)
       .gte("fulfillment_date", today)
       .lte("fulfillment_date", maximumDate),
+    supabase
+      .from("external_orders")
+      .select("id,capacity_adjustment_id")
+      .gte("fulfillment_date", today)
+      .lte("fulfillment_date", maximumDate),
   ]);
   const settings = requireData(settingsResult.data, settingsResult.error);
   const hours = requireData(hoursResult.data, hoursResult.error);
@@ -95,6 +108,13 @@ export async function getAdminFulfillmentData(now: Date = new Date()) {
     adjustmentsResult.error,
   );
   const holdRows = requireData(holdsResult.data, holdsResult.error);
+  const trackedRows = requireData(
+    trackedExternalResult.data,
+    trackedExternalResult.error,
+  );
+  const trackedByAdjustment = new Map(
+    trackedRows.map((row) => [row.capacity_adjustment_id, row.id]),
+  );
   const blackouts: AdminBlackout[] = blackoutRows.map((row) => ({
     id: row.id,
     date: row.fulfillment_date,
@@ -111,9 +131,14 @@ export async function getAdminFulfillmentData(now: Date = new Date()) {
     source: row.source,
     customerReference: row.customer_reference,
     internalNote: row.internal_note,
+    trackedOrderId: trackedByAdjustment.get(row.id) ?? null,
   }));
+  const start =
+    requestedStart && requestedStart >= today && requestedStart <= maximumDate
+      ? requestedStart
+      : today;
   const days: AdminCapacityDay[] = Array.from({ length: 14 }, (_, index) => {
-    const date = addCalendarDays(today, index);
+    const date = addCalendarDays(start, index);
     const dateAdjustments = adjustmentRows.filter(
       (row) => row.fulfillment_date === date,
     );
@@ -125,6 +150,18 @@ export async function getAdminFulfillmentData(now: Date = new Date()) {
       (row) => row.fulfillment_date === date,
     ).length;
     const consumed = manualOrders + confirmedWebsiteOrders + activeHolds;
+    const availability = adminCalendarStatus({
+      date,
+      today,
+      maximumDate,
+      minimumNoticeDays: settings.minimum_notice_days,
+      capacity: settings.daily_capacity,
+      consumed,
+      enabledWeekdays: hours
+        .filter((row) => row.is_enabled)
+        .map((row) => row.iso_weekday),
+      blockedDates: blackoutRows.map((row) => row.fulfillment_date),
+    });
     return {
       date,
       dateLabel: formatLocalDateLabel(date),
@@ -135,8 +172,9 @@ export async function getAdminFulfillmentData(now: Date = new Date()) {
       remaining: Math.max(0, settings.daily_capacity - consumed),
       blackoutCount: blackoutRows.filter((row) => row.fulfillment_date === date)
         .length,
+      ...availability,
     };
-  });
+  }).filter((day) => day.date <= maximumDate);
 
   return {
     today,

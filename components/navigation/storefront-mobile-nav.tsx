@@ -12,6 +12,7 @@ const navigationItems = [
   { href: "/menu", label: "Pastry menu" },
   { href: "/#ordering", label: "Order guide" },
   { href: "/#service", label: "Delivery" },
+  { href: "/account", label: "Your account" },
 ] as const;
 
 export function StorefrontMobileNav() {

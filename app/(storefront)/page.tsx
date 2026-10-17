@@ -13,8 +13,16 @@ import {
 import { CatalogueSection } from "@/components/storefront/catalogue-section";
 import { buttonVariants } from "@/components/ui/button";
 import { getPublishedCatalogue } from "@/lib/catalog/public-data";
-import { BUSINESS_TIME_ZONE } from "@/lib/config/business";
+import {
+  formatMinimumOrderPrice,
+  formatUnitPrice,
+} from "@/lib/catalog/presentation";
+import { getPublicHome } from "@/lib/content/public-data";
+import { getServerEnvironment } from "@/lib/env/server";
+import { resolvedPaymentConfiguration } from "@/lib/payments/server-configuration";
+import { storefrontCheckoutNotice } from "@/lib/payments/storefront-copy";
 import { cn } from "@/lib/utils/cn";
+import { getOperationalSettings } from "@/lib/admin/settings";
 
 export const metadata: Metadata = {
   title: "Toronto-made pastries for every sweet plan",
@@ -26,22 +34,47 @@ const orderingSteps = [
   {
     icon: Sparkles,
     title: "Pick your pastries",
-    copy: "Choose from the approved menu, mix eligible flavours, and add decoration or customization details where offered.",
+    copy: "Choose your pastries and any available flavours or decorations.",
   },
   {
     icon: CalendarDays,
     title: "Choose a delivery date",
-    copy: `Select delivery in ${BUSINESS_TIME_ZONE}. Availability follows the notice, closure, and four-order capacity rules.`,
+    copy: "Choose an available date for delivery in Toronto, Markham, or Mississauga. Order at least four days ahead.",
   },
   {
     icon: WalletCards,
     title: "Review and pay",
-    copy: "See the full item total and delivery fee before paying securely with Apple Pay or Google Pay.",
+    copy: "Review your total and delivery fee, then pay by credit or debit card. Apple Pay and Google Pay appear on supported devices.",
   },
 ] as const;
 
 export default async function HomePage() {
-  const categories = await getPublishedCatalogue();
+  const environment = getServerEnvironment();
+  const [configuration, categories, home, operations] = await Promise.all([
+    resolvedPaymentConfiguration(environment),
+    getPublishedCatalogue(),
+    getPublicHome(),
+    environment.SUPABASE_SECRET_KEY ? getOperationalSettings() : null,
+  ]);
+  const checkoutNotice =
+    operations && !operations.accepting_orders
+      ? operations.pause_message
+      : storefrontCheckoutNotice(
+          environment.PAYMENTS_MODE,
+          configuration.blockers,
+        );
+  const featured =
+    categories
+      .flatMap((category) => category.products)
+      .find(
+        (product) =>
+          product.slug === "red-velvet-cookies" &&
+          product.isAvailable &&
+          product.images.length > 0,
+      ) ??
+    categories
+      .flatMap((category) => category.products)
+      .find((product) => product.isAvailable && product.images.length > 0);
   return (
     <>
       <section className="border-border overflow-hidden border-b">
@@ -51,13 +84,11 @@ export default async function HomePage() {
               <p className="text-brand-strong text-[0.68rem] font-bold tracking-[0.16em] uppercase sm:text-xs">
                 Toronto-made · local delivery
               </p>
-              <h1 className="font-display text-ink mt-5 text-[clamp(2rem,3.5vw,3.25rem)] text-balance">
-                Welcome to Suga &amp; Spies Pastries.
+              <h1 className="font-display text-ink mt-5 text-[clamp(2rem,3.5vw,3.25rem)] text-balance [overflow-wrap:anywhere]">
+                {home.heroTitle}
               </h1>
-              <p className="text-ink-soft mx-auto mt-5 max-w-[30rem] text-base leading-7 text-pretty">
-                Cheesecakes, cookies, tarts, muffins, and golden savouries made
-                in Toronto for scheduled delivery across Toronto, Markham, and
-                Mississauga.
+              <p className="text-ink-soft mx-auto mt-5 max-w-[30rem] text-base leading-7 text-pretty [overflow-wrap:anywhere]">
+                {home.heroDescription}
               </p>
               <div className="mt-8 flex justify-center">
                 <Link
@@ -74,17 +105,21 @@ export default async function HomePage() {
                   />
                 </Link>
               </div>
-              <p className="text-ink-soft mx-auto mt-5 max-w-lg text-xs leading-5 sm:text-sm sm:leading-6">
-                Online checkout is not accepting orders yet. The menu and
-                ordering experience shown here are being prepared for launch.
-              </p>
+              {checkoutNotice ? (
+                <p className="text-ink-soft mx-auto mt-5 max-w-lg text-xs leading-5 sm:text-sm sm:leading-6">
+                  {checkoutNotice}
+                </p>
+              ) : null}
             </div>
           </div>
 
           <figure className="bg-canvas-strong relative min-h-[32rem] sm:min-h-[38rem] lg:min-h-[clamp(36rem,42vw,43rem)]">
             <Image
-              src="/images/storefront/red-velvet-cookies.jpg"
-              alt="Red velvet cookies"
+              src={
+                featured?.images[0]?.src ??
+                "/images/storefront/red-velvet-cookies.jpg"
+              }
+              alt={featured?.images[0]?.alt ?? "Freshly baked pastries"}
               fill
               loading="eager"
               sizes="(max-width: 1023px) 100vw, 50vw"
@@ -95,19 +130,21 @@ export default async function HomePage() {
                 From the pastry case
               </p>
               <h2 className="font-display text-ink mt-3 text-2xl sm:text-3xl">
-                Red velvet cookie
+                {featured?.name ?? "Explore our pastry case"}
               </h2>
               <p className="text-ink-soft mt-3 text-sm font-semibold sm:text-base">
-                $12.00 for 4 · $3.00 each
+                {featured
+                  ? `${formatMinimumOrderPrice(featured)} · ${formatUnitPrice(featured)}`
+                  : "See what is available in the menu."}
               </p>
               <Link
-                href="/menu/red-velvet-cookies"
+                href={featured ? `/menu/${featured.slug}` : "#menu"}
                 className={cn(
                   buttonVariants({ size: "lg" }),
                   "mt-6 rounded-full px-8 text-sm tracking-[0.1em] uppercase",
                 )}
               >
-                View cookie
+                {featured ? "View pastry" : "See the menu"}
               </Link>
             </figcaption>
           </figure>
@@ -172,14 +209,11 @@ export default async function HomePage() {
               <p className="text-brand text-[0.7rem] font-semibold tracking-[0.15em] uppercase">
                 Your order, your occasion
               </p>
-              <h2 className="font-display text-ink mt-4 text-2xl text-balance sm:text-3xl">
-                Thoughtful details belong on the menu.
+              <h2 className="font-display text-ink mt-4 text-2xl text-balance [overflow-wrap:anywhere] sm:text-3xl">
+                {home.storyTitle}
               </h2>
-              <p className="text-ink-soft mt-5 text-base leading-7">
-                Cakes, cookies, cupcakes, and non-plain cheesecakes can support
-                owner-approved decoration requests. The final product page will
-                show exactly what can be changed, any extra cost, and where a
-                custom request needs approval.
+              <p className="text-ink-soft mt-5 text-base leading-7 [overflow-wrap:anywhere]">
+                {home.storyBody}
               </p>
               <div className="border-brand/20 mt-8 grid gap-4 border-t pt-6 sm:grid-cols-2">
                 <div>
@@ -192,10 +226,10 @@ export default async function HomePage() {
                 </div>
                 <div>
                   <p className="text-ink text-sm font-semibold">
-                    Approved before payment
+                    Details before checkout
                   </p>
                   <p className="text-ink-soft mt-1 text-xs leading-5">
-                    Special details stay clear before checkout.
+                    Available choices and their prices stay clear as you order.
                   </p>
                 </div>
               </div>
@@ -209,14 +243,14 @@ export default async function HomePage() {
           <div className="grid gap-10 lg:grid-cols-[0.62fr_1.38fr] lg:gap-16">
             <div className="max-w-xl">
               <p className="text-brand text-[0.7rem] font-semibold tracking-[0.15em] uppercase">
-                How ordering will work
+                How to order
               </p>
               <h2 className="font-display text-ink mt-4 text-2xl text-balance sm:text-3xl">
                 Easy to plan. Clear at every step.
               </h2>
               <p className="text-ink-soft mt-5 text-sm leading-7 sm:text-base">
-                Your pastries, delivery address, and charges are reviewed before
-                payment and confirmed by email.
+                Review your pastries, delivery address, and final charges before
+                payment. Your order is confirmed after payment is verified.
               </p>
             </div>
 
@@ -264,9 +298,9 @@ export default async function HomePage() {
                 Toronto, Markham & Mississauga
               </h2>
               <p className="text-ink-soft mt-4 text-sm leading-7 sm:text-base">
-                Delivery will be available within the approved distance from the
-                business. The delivery-pricing formula is still provisional, so
-                it is not displayed as a final promise on this page.
+                We deliver to eligible addresses in these cities. Enter your
+                address at checkout to confirm it is within range and see the
+                delivery fee before paying.
               </p>
             </div>
           </article>

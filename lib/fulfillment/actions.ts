@@ -57,7 +57,7 @@ async function activeCommitmentsForDate(
       .eq("status", "active")
       .or(`expires_at.gt.${now},payment_pending.eq.true`),
   ]);
-  if (orders.error || holds.error) return 0;
+  if (orders.error || holds.error) return null;
   return (orders.count ?? 0) + (holds.count ?? 0);
 }
 
@@ -113,6 +113,20 @@ export async function createBlackout(
       "error",
       "Your owner session is no longer valid. Sign in again.",
     );
+  const commitments = await activeCommitmentsForDate(
+    access.supabase,
+    parsed.data.date,
+  );
+  if (commitments === null)
+    return state(
+      "error",
+      "We could not check existing orders. Please retry before blocking this date.",
+    );
+  if (commitments > 0 && formData.get("confirmCommitments") !== "on")
+    return state(
+      "error",
+      `This date has ${commitments} active orders or payment holds. Review them in Orders, then confirm below to block new bookings. Existing commitments will not be cancelled.`,
+    );
   const result = await access.supabase.from("fulfillment_blackouts").insert({
     fulfillment_date: parsed.data.date,
     scope: parsed.data.scope,
@@ -121,10 +135,6 @@ export async function createBlackout(
     created_by: access.owner.id,
   });
   if (result.error) return state("error", safeDatabaseMessage(result.error));
-  const commitments = await activeCommitmentsForDate(
-    access.supabase,
-    parsed.data.date,
-  );
   refreshAvailability();
   return state("success", blackoutSavedMessage(commitments, "created"));
 }
@@ -148,6 +158,20 @@ export async function updateBlackout(
       "error",
       "Your owner session is no longer valid. Sign in again.",
     );
+  const commitments = await activeCommitmentsForDate(
+    access.supabase,
+    parsed.data.date,
+  );
+  if (commitments === null)
+    return state(
+      "error",
+      "We could not check existing orders. Please retry before changing this date.",
+    );
+  if (commitments > 0 && formData.get("confirmCommitments") !== "on")
+    return state(
+      "error",
+      `This date has ${commitments} active orders or payment holds. Confirm below to continue. Existing commitments will not be cancelled.`,
+    );
   const result = await access.supabase
     .from("fulfillment_blackouts")
     .update({
@@ -166,10 +190,6 @@ export async function updateBlackout(
       "error",
       "This blackout changed in another tab. Refresh before editing it.",
     );
-  const commitments = await activeCommitmentsForDate(
-    access.supabase,
-    parsed.data.date,
-  );
   refreshAvailability();
   return state("success", blackoutSavedMessage(commitments, "updated"));
 }

@@ -9,9 +9,9 @@ Suga Spies is a mobile-first pastry ordering and owner-operations application fo
 3. Install dependencies with `npm install`.
 4. Start the app with `npm run dev`.
 
-The application is available at [http://localhost:3000](http://localhost:3000). The public menu is at `/menu`, the persisted guest cart is at `/cart`, and the reusable component preview is at `/foundation`. The owner workspace at `/admin` is private and fails closed until Supabase authentication is configured.
+The application is available at [http://localhost:3000](http://localhost:3000). The public menu is at `/menu`; the cart and delivery-date selection open in a right-side drawer. `/cart` remains a direct-access fallback, and the reusable component preview is at `/foundation`. The owner workspace at `/admin` is private and requires an approved active owner account.
 
-The site is delivery-only. Checkout continues through `/checkout/fulfillment`, `/checkout/details`, and `/checkout/payment`; the owner manages delivery rates at `/admin/delivery` and paid orders at `/admin/orders`. See [the payment and order setup guide](docs/payment-order-vertical-slice.md) before enabling any sandbox or live payment, webhook, or reconciliation schedule.
+The site is delivery-only. Customers choose a date in the drawer, then enter contact/address information and pay on `/checkout`. Older checkout URLs remain compatibility routes, not additional required steps. The owner has Overview, Orders, Kitchen plan, Menu, Delivery calendar, Website content, and Settings. Delivery pricing is in Settings; `/admin/delivery` remains a compatible direct link. See [the payment and order setup guide](docs/payment-order-vertical-slice.md) before enabling payments, webhooks, or a reconciliation schedule.
 
 ## Quality commands
 
@@ -20,6 +20,8 @@ npm run lint
 npm run typecheck
 npm run format:check
 npm run test:unit
+npm run test:release
+npm run check:release
 npm run test:db:payments
 npm run test:db
 npm run build
@@ -27,6 +29,17 @@ npm run test:e2e
 ```
 
 Install the Playwright browsers once with `npx playwright install` before running browser tests locally.
+
+## Owner handover and release
+
+- [Plain-language owner guide](docs/owner-admin-guide.md)
+- [Owner acceptance checklist](docs/admin-workspace-completion.md)
+- [Business email and password-recovery setup](docs/production-email-setup.md)
+- [Failure handling, release checks, scheduling, and recovery](docs/admin-operations-and-release.md)
+
+GitHub runs credential-free release checks. Connected database/checkout tests,
+approved owner acceptance, real card/wallet testing, and visual review remain
+separate release gates. A deployed admin is not proof that live ordering is ready.
 
 ## Project rules
 

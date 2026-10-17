@@ -309,11 +309,12 @@ export function PaymentCheckout({
                       aria-hidden="true"
                     />
                     <p>
-                      Cancel by{" "}
+                      Cancel before{" "}
                       <strong>
                         {formatBusinessDateTime(snapshot.cancellationDeadline)}
                       </strong>{" "}
-                      for a full refund to the original payment method.
+                      for a full refund to the original payment method, provided
+                      preparation has not started.
                     </p>
                   </div>
 

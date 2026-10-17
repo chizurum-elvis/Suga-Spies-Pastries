@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { adminNavigationItems } from "@/components/navigation/admin-nav-items";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 
 type AdminMobileNavProps = {
   ownerEmail: string;
@@ -37,7 +37,7 @@ export function AdminMobileNav({
             Owner workspace navigation
           </Dialog.Title>
           <div className="flex items-center justify-between gap-4">
-            <BrandMark />
+            <BrandMark prefetch={false} />
             <Dialog.Close asChild>
               <Button
                 variant="quiet"
@@ -49,8 +49,8 @@ export function AdminMobileNav({
             </Dialog.Close>
           </div>
           <Dialog.Description className="text-ink-soft mt-6 text-sm leading-6">
-            Navigate the protected owner workspace. Customer and order data is
-            not connected yet.
+            Manage pastry orders, menu items, delivery availability, and website
+            content.
           </Dialog.Description>
           <nav aria-label="Admin navigation" className="mt-7">
             <ul className="grid gap-1.5">
@@ -60,7 +60,10 @@ export function AdminMobileNav({
                 const isCurrent =
                   itemPath === "/admin"
                     ? pathname === "/admin"
-                    : pathname.startsWith(itemPath);
+                    : pathname === itemPath ||
+                      pathname.startsWith(`${itemPath}/`) ||
+                      (itemPath === "/admin/settings" &&
+                        pathname === "/admin/delivery");
                 return (
                   <li key={item.href}>
                     <Dialog.Close asChild>

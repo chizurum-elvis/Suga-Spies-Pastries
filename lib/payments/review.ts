@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { getOperationalSettings } from "@/lib/admin/settings";
 import { serializeCart, rawCartSchema } from "@/lib/cart/schema";
 import { validateCartAgainstCatalogue } from "@/lib/cart/server-validation";
 import { DeliveryError } from "@/lib/delivery/errors";
@@ -13,7 +14,7 @@ import { pricingFingerprint, sha256 } from "@/lib/fulfillment/checkout-draft";
 import { validateFulfillmentSelection } from "@/lib/fulfillment/server-data";
 import { deliveryCancellationDeadline } from "@/lib/fulfillment/rules";
 import { createSecretSupabaseClient } from "@/lib/supabase/secret";
-import { paymentConfiguration } from "@/lib/payments/configuration";
+import { resolvedPaymentConfiguration } from "@/lib/payments/server-configuration";
 import {
   purchaseSnapshotSchema,
   type PaymentReview,
@@ -88,7 +89,10 @@ export function snapshotFingerprint(
 
 export async function buildPaymentReview(token?: string) {
   const environment = getServerEnvironment();
-  const config = paymentConfiguration(environment);
+  const config = await resolvedPaymentConfiguration(environment);
+  const operations = await getOperationalSettings();
+  if (!operations.accepting_orders)
+    config.blockers.push(operations.pause_message);
   const context = await deliveryContext(token);
   const worker = await createSecretSupabaseClient()
     .from("payment_worker_health")
@@ -220,7 +224,9 @@ export async function reservePayment(
       "reservation_failed",
       result.error.message.includes("capacity")
         ? "That day just filled up. Choose another delivery date; your box is saved."
-        : "Checkout changed. Please review your delivery details again.",
+        : result.error.message.includes("new_orders_paused")
+          ? "New ordering has just been paused. Your box is saved; no new payment has been started."
+          : "Checkout changed. Please review your delivery details again.",
       409,
     );
   const attempt = await context.db

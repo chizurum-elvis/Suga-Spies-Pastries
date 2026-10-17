@@ -19,10 +19,10 @@
           text-transform: uppercase;
         "
       >
-        Suga Spies · Private owner access
+        Suga Spies · Account security
       </p>
       <h1 style="margin: 0 0 16px; font-size: 28px; line-height: 1.2">
-        Reset your owner password
+        Reset your password
       </h1>
       <p
         style="
@@ -32,12 +32,12 @@
           line-height: 1.6;
         "
       >
-        We received a request to choose a new password for the Suga Spies owner
-        workspace. Continue only if you made this request.
+        We received a request to choose a new password for your Suga Spies
+        account. Continue only if you made this request.
       </p>
       <p style="margin: 0 0 24px">
         <a
-          href="{{ .SiteURL }}/admin/recover?token_hash={{ .TokenHash }}&type=recovery"
+          href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery"
           style="
             display: inline-block;
             border-radius: 10px;

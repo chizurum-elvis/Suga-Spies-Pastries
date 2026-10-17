@@ -5,6 +5,10 @@ import { deliveryInputSchema } from "@/lib/delivery/schema";
 import { localDateSchema } from "@/lib/fulfillment/schema";
 import { deliveryCancellationDeadline } from "@/lib/fulfillment/rules";
 import {
+  orderPaymentStatusSchema,
+  refundViewSchema,
+} from "@/lib/orders/cancellation";
+import {
   fulfillmentStatusSchema,
   orderEventSchema,
   orderStatusSchema,
@@ -46,7 +50,15 @@ export const purchaseSnapshotSchema = z
           !line.product ||
           line.unitPriceCents === null ||
           line.lineSubtotalCents === null ||
-          line.lineSubtotalCents !== line.unitPriceCents * line.quantity,
+          line.lineSubtotalCents !==
+            line.unitPriceCents * line.quantity +
+              line.options
+                .filter((option) => option.selectionType === "quantity")
+                .reduce(
+                  (total, option) =>
+                    total + option.priceDeltaCents * option.quantity,
+                  0,
+                ),
       )
     )
       fail("A complete, priced pastry box is required.");
@@ -122,9 +134,39 @@ export const orderViewSchema = z.strictObject({
   updatedAt: z.iso.datetime({ offset: true }),
   version: z.number().int().min(1),
   status: orderStatusSchema,
-  paymentStatus: z.literal("paid"),
+  paymentStatus: orderPaymentStatusSchema,
+  refund: refundViewSchema.nullable(),
+  redelivery: z
+    .strictObject({
+      state: z.enum([
+        "awaiting_customer",
+        "awaiting_owner",
+        "awaiting_payment",
+        "payment_review",
+        "scheduled",
+        "out_for_delivery",
+        "delivered",
+        "discarded",
+      ]),
+      respondBy: z.iso.datetime({ offset: true }),
+      requestedAddress: deliveryInputSchema.shape.address.nullable(),
+      selectedDate: localDateSchema.nullable(),
+      feeCents: moneySchema.nullable(),
+      freeReason: z.enum(["original_free", "business_fault"]).nullable(),
+      paymentStatus: z.enum([
+        "not_required",
+        "pending",
+        "paid",
+        "refund_pending",
+        "refunded",
+        "needs_review",
+      ]),
+      paymentExpiresAt: z.iso.datetime({ offset: true }).nullable(),
+      feeRefund: refundViewSchema.nullable(),
+    })
+    .nullable(),
   fulfillmentStatus: fulfillmentStatusSchema,
-  events: z.array(orderEventSchema).min(1).max(20),
+  events: z.array(orderEventSchema).min(1).max(100),
   snapshot: purchaseSnapshotSchema,
 });
 export type PurchaseSnapshot = z.infer<typeof purchaseSnapshotSchema>;

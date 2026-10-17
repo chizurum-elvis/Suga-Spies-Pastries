@@ -7,16 +7,19 @@ type BrandMarkProps = {
   className?: string;
   compact?: boolean;
   inverted?: boolean;
+  prefetch?: boolean;
 };
 
 export function BrandMark({
   className,
   compact = false,
   inverted = false,
+  prefetch,
 }: BrandMarkProps) {
   return (
     <Link
       href="/"
+      prefetch={prefetch}
       aria-label="Suga and Spies home"
       className={cn(
         "group inline-flex min-h-11 items-center rounded-md focus-visible:outline-offset-4",

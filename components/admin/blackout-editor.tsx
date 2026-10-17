@@ -96,6 +96,17 @@ export function BlackoutEditor({
               className="min-h-20"
             />
           </label>
+          <label className="flex min-h-11 items-start gap-3 text-sm leading-5">
+            <input
+              type="checkbox"
+              name="confirmCommitments"
+              className="accent-brand mt-1 size-4 shrink-0"
+            />
+            <span>
+              I have reviewed existing orders on this date and will still fulfil
+              them.
+            </span>
+          </label>
           <Button
             type="submit"
             variant="secondary"

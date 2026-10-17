@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { suggestCatalogueSlug } from "@/lib/catalog/slug";
 import { Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -33,6 +34,8 @@ export function ProductForm({
     initialCatalogueActionState,
   );
   const router = useRouter();
+  const [slug, setSlug] = useState(product?.slug ?? "");
+  const [customSlug, setCustomSlug] = useState(Boolean(product));
   useEffect(() => {
     if (state.status === "success") router.refresh();
   }, [router, state.submissionId, state.status]);
@@ -48,15 +51,15 @@ export function ProductForm({
       ) : null}
 
       <Card tone="admin" padding="lg">
-        <h2 className="text-lg font-extrabold">Product identity</h2>
+        <h2 className="text-lg font-extrabold">Pastry details</h2>
         <p className="text-ink-soft mt-1 text-sm leading-6">
-          Use concise customer-facing wording. A published URL cannot be changed
-          later.
+          Give this pastry a clear name. Its website page address is suggested
+          automatically and stays fixed once published.
         </p>
         <div className="mt-6 grid gap-5 sm:grid-cols-2">
           <Field
             id="product-name"
-            label="Product name"
+            label="Pastry name"
             error={state.errors?.name}
             required
           >
@@ -65,6 +68,10 @@ export function ProductForm({
                 {...props}
                 name="name"
                 defaultValue={product?.name}
+                onChange={(event) => {
+                  if (!customSlug)
+                    setSlug(suggestCatalogueSlug(event.target.value));
+                }}
                 maxLength={120}
                 required
               />
@@ -72,8 +79,8 @@ export function ProductForm({
           </Field>
           <Field
             id="product-slug"
-            label="URL slug"
-            description="Lowercase letters, numbers, and hyphens. Example: chocolate-chunk-cookies"
+            label="Website page address"
+            description="The end of this pastry's link, for example chocolate-chunk-cookies. Usually you can leave the suggestion as it is."
             error={state.errors?.slug}
             required
           >
@@ -81,7 +88,11 @@ export function ProductForm({
               <Input
                 {...props}
                 name="slug"
-                defaultValue={product?.slug}
+                value={slug}
+                onChange={(event) => {
+                  setCustomSlug(true);
+                  setSlug(event.target.value);
+                }}
                 maxLength={120}
                 readOnly={Boolean(product?.publishedAt)}
                 required
@@ -170,8 +181,8 @@ export function ProductForm({
       <Card tone="admin" padding="lg">
         <h2 className="text-lg font-extrabold">Price and quantity</h2>
         <p className="text-ink-soft mt-1 text-sm leading-6">
-          All prices are Canadian dollars. The server converts them to exact
-          integer cents.
+          Enter Canadian-dollar prices for one piece or one whole cake. Customer
+          totals follow the quantity selected.
         </p>
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <Field
@@ -231,14 +242,14 @@ export function ProductForm({
                 min={1}
                 max={10000}
                 step={1}
-                defaultValue={product?.minimumQuantity ?? 1}
+                defaultValue={product?.minimumQuantity ?? 4}
                 required
               />
             )}
           </Field>
           <Field
             id="quantity-step"
-            label="Quantity step"
+            label="Quantity increment"
             description="Use 1 when any quantity above the minimum is allowed."
             error={state.errors?.quantityStep}
             required
@@ -330,7 +341,7 @@ export function ProductForm({
         </div>
       </Card>
 
-      <div className="border-border bg-surface-raised sticky bottom-3 z-10 flex items-center justify-between gap-4 rounded-lg border p-3 shadow-lg">
+      <div className="border-border bg-surface-raised flex flex-wrap items-center justify-between gap-4 rounded-lg border p-3">
         <p className="text-ink-soft hidden text-xs sm:block">
           Saving details does not automatically publish a draft.
         </p>

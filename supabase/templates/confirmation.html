@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin: 0; background: #fbf6ef; color: #241916">
+    <div
+      style="
+        margin: 0 auto;
+        max-width: 560px;
+        padding: 40px 24px;
+        font-family: Arial, sans-serif;
+      "
+    >
+      <p
+        style="
+          margin: 0 0 12px;
+          color: #8e234f;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        "
+      >
+        Suga Spies · Your pastry account
+      </p>
+      <h1 style="margin: 0 0 16px; font-size: 28px; line-height: 1.2">
+        Confirm your email
+      </h1>
+      <p
+        style="
+          margin: 0 0 24px;
+          color: #675550;
+          font-size: 16px;
+          line-height: 1.6;
+        "
+      >
+        One quick check, then your pastry orders can live in one place. Continue
+        only if you created this account.
+      </p>
+      <p style="margin: 0 0 24px">
+        <a
+          href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email"
+          style="
+            display: inline-block;
+            border-radius: 10px;
+            background: #8e234f;
+            padding: 14px 20px;
+            color: #ffffff;
+            font-weight: 700;
+            text-decoration: none;
+          "
+          >Confirm my email</a
+        >
+      </p>
+      <p style="margin: 0; color: #675550; font-size: 14px; line-height: 1.6">
+        If you did not sign up, leave this link unused.
+      </p>
+    </div>
+  </body>
+</html>

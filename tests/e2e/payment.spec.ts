@@ -7,6 +7,12 @@ import {
 } from "../fixtures/payment";
 import type { PurchaseSnapshot } from "../../lib/payments/schema";
 import type { DeliveryState } from "../../lib/delivery/schema";
+import type { AvailabilityMonth } from "../../lib/fulfillment/types";
+import {
+  deliveryCancellationDeadline,
+  formatLocalDateLabel,
+  getTorontoLocalDate,
+} from "../../lib/fulfillment/rules";
 
 const CART_KEY = "suga-spies:guest-cart";
 
@@ -17,7 +23,7 @@ function confirmedDelivery(snapshot: PurchaseSnapshot): DeliveryState {
     version: 3,
     input: snapshot.delivery,
     status: "confirmed",
-    dateLabel: "Monday, October 12, 2026",
+    dateLabel: formatLocalDateLabel(snapshot.fulfillmentDate),
     quote: {
       id: "98000000-0000-4000-8000-000000000011",
       address: snapshot.delivery.address,
@@ -54,6 +60,28 @@ async function saveDeliveryDate(
   snapshot: PurchaseSnapshot,
 ) {
   await page.goto("/");
+  // Checkout validates real Toronto dates. Fixed unit fixtures must not make
+  // this connected browser test expire as the calendar moves forward.
+  let month: string | null = getTorontoLocalDate().slice(0, 7);
+  let date: string | undefined;
+  for (let index = 0; month && index < 3; index++) {
+    const availability = await page.request.get(
+      "/api/fulfillment/availability",
+      { params: { method: "delivery", month } },
+    );
+    expect(availability.status(), "A connected test database is required").toBe(
+      200,
+    );
+    const calendar: AvailabilityMonth = await availability.json();
+    date = calendar.days.find((day) => day.selectable)?.date;
+    if (date) break;
+    month = calendar.nextMonth;
+  }
+  if (!date)
+    throw new Error("No open date is available for the checkout fixture.");
+  snapshot.fulfillmentDate = date;
+  snapshot.cancellationDeadline =
+    deliveryCancellationDeadline(date).toISOString();
   const response = await page.request.post("/api/checkout/fulfillment", {
     headers: {
       origin: new URL(page.url()).origin,
@@ -521,6 +549,8 @@ test("provider-confirmed order replaces processing, renders securely, and clears
           version: order.version,
           status: order.status,
           paymentStatus: order.payment_status,
+          refund: null,
+          redelivery: null,
           fulfillmentStatus: order.fulfillment_status,
           events: [
             {
@@ -573,6 +603,8 @@ test("customer tracking refreshes forward without exposing its access token", as
           version: preparing ? 2 : 1,
           status: "confirmed",
           paymentStatus: "paid",
+          refund: null,
+          redelivery: null,
           fulfillmentStatus: preparing ? "preparing" : "received",
           events: [
             {

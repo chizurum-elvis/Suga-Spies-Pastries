@@ -1,6 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
@@ -346,6 +347,133 @@ export async function createVariant(
     return state("error", safeDatabaseMessage(result.error.code));
   refreshCatalogue(validation.data.productId);
   return state("success", "Variant added.");
+}
+
+export async function updateCatalogueChoice(
+  _previous: CatalogueActionState,
+  form: FormData,
+): Promise<CatalogueActionState> {
+  const identity = z
+    .object({
+      productId: z.uuid(),
+      itemId: z.uuid(),
+      itemType: z.enum(["variant", "option_group", "option_value"]),
+      updatedAt: z.iso.datetime({ offset: true }),
+    })
+    .safeParse(
+      Object.fromEntries(
+        ["productId", "itemId", "itemType", "updatedAt"].map((key) => [
+          key,
+          form.get(key),
+        ]),
+      ),
+    );
+  if (!identity.success)
+    return state("error", "Refresh this pastry before editing its choices.");
+  const db = await authorizedClient();
+  if (!db) return state("error", "Please sign in again to save this choice.");
+  const { productId, itemId, itemType, updatedAt } = identity.data;
+  let result: { data: { id: string } | null; error: { code?: string } | null };
+  if (itemType === "variant") {
+    const parsed = variantFormSchema.safeParse({
+      productId,
+      name: form.get("name"),
+      price: form.get("price"),
+      minimumQuantity: form.get("minimumQuantity"),
+      quantityStep: form.get("quantityStep"),
+      maximumQuantity: form.get("maximumQuantity"),
+    });
+    if (!parsed.success)
+      return state("error", "Check the name, price, and quantity rules.");
+    const product = await db
+      .from("products")
+      .select("minimum_quantity,maximum_quantity")
+      .eq("id", productId)
+      .single();
+    if (product.error)
+      return state("error", "This pastry could not be verified.");
+    const min = parsed.data.minimumQuantity ?? product.data.minimum_quantity;
+    const max = parsed.data.maximumQuantity ?? product.data.maximum_quantity;
+    if (max !== null && max < min)
+      return state(
+        "error",
+        "Maximum quantity cannot be below the effective minimum.",
+      );
+    result = await db
+      .from("product_variants")
+      .update({
+        name: parsed.data.name,
+        price_cents: parsed.data.price,
+        minimum_quantity: parsed.data.minimumQuantity,
+        quantity_step: parsed.data.quantityStep,
+        maximum_quantity: parsed.data.maximumQuantity,
+      })
+      .eq("id", itemId)
+      .eq("product_id", productId)
+      .eq("updated_at", updatedAt)
+      .select("id")
+      .maybeSingle();
+  } else if (itemType === "option_group") {
+    const parsed = optionGroupFormSchema.safeParse({
+      productId,
+      name: form.get("name"),
+      selectionType: form.get("selectionType"),
+      isRequired: form.get("isRequired") === "on",
+    });
+    if (!parsed.success)
+      return state("error", "Check this group's name and selection rule.");
+    result = await db
+      .from("product_option_groups")
+      .update({
+        name: parsed.data.name,
+        selection_type: parsed.data.selectionType,
+        is_required: parsed.data.isRequired,
+        minimum_selections: parsed.data.isRequired ? 1 : 0,
+        maximum_selections: parsed.data.selectionType === "single" ? 1 : null,
+      })
+      .eq("id", itemId)
+      .eq("product_id", productId)
+      .eq("updated_at", updatedAt)
+      .select("id")
+      .maybeSingle();
+  } else {
+    const groupId = z.uuid().safeParse(form.get("optionGroupId"));
+    const parsed = optionValueFormSchema.safeParse({
+      optionGroupId: groupId.data,
+      name: form.get("name"),
+      price: form.get("price"),
+    });
+    if (!parsed.success)
+      return state("error", "Check this choice's name and additional price.");
+    const group = await db
+      .from("product_option_groups")
+      .select("id")
+      .eq("id", parsed.data.optionGroupId)
+      .eq("product_id", productId)
+      .maybeSingle();
+    if (group.error || !group.data)
+      return state("error", "This choice does not belong to this pastry.");
+    result = await db
+      .from("product_option_values")
+      .update({ name: parsed.data.name, price_delta_cents: parsed.data.price })
+      .eq("id", itemId)
+      .eq("option_group_id", group.data.id)
+      .eq("updated_at", updatedAt)
+      .select("id")
+      .maybeSingle();
+  }
+  if (result.error)
+    return state("error", safeDatabaseMessage(result.error.code));
+  if (!result.data)
+    return state(
+      "error",
+      "This choice changed in another tab. Refresh before editing.",
+    );
+  refreshCatalogue(productId);
+  return state(
+    "success",
+    "Choice updated. Existing paid orders keep their original selections and prices.",
+  );
 }
 
 export async function createOptionGroup(

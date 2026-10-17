@@ -1,4 +1,5 @@
 import { policySchema } from "@/lib/payments/schema";
+import { isResendTestSender } from "@/lib/payments/email-configuration";
 
 type Configuration = {
   PAYMENTS_MODE: "disabled" | "test" | "live";
@@ -14,6 +15,7 @@ type Configuration = {
   ORDER_EMAIL_FROM?: string;
   ORDER_ALERT_EMAIL?: string;
   GOOGLE_MAPS_SERVER_API_KEY?: string;
+  NEXT_PUBLIC_SITE_URL?: string;
 };
 export function paymentConfiguration(environment: Configuration) {
   const blockers: string[] = [];
@@ -57,6 +59,8 @@ export function paymentConfiguration(environment: Configuration) {
       !environment.ORDER_ALERT_EMAIL)
   )
     blockers.push("Order confirmation emails are not connected yet.");
+  if (!testOnly && isResendTestSender(environment.ORDER_EMAIL_FROM))
+    blockers.push("Business email sending is awaiting setup.");
   if (!testOnly && !environment.GOOGLE_MAPS_SERVER_API_KEY)
     blockers.push("Delivery verification is not connected yet.");
   return { blockers, testOnly, policies };

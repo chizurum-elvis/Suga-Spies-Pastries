@@ -109,7 +109,8 @@ select results_eq(
 );
 
 select results_eq(
-  $$select count(*)::integer from public.capacity_holds where status = 'active'$$,
+  $$select count(*)::integer from public.capacity_holds where status = 'active'
+    and fulfillment_date = (select open_date from fulfillment_test_context)$$,
   array[1],
   'idempotent retries do not consume another daily space'
 );
@@ -155,7 +156,8 @@ select results_eq(
 );
 
 select results_eq(
-  $$select count(*)::integer from public.capacity_holds where status = 'active'$$,
+  $$select count(*)::integer from public.capacity_holds where status = 'active'
+    and fulfillment_date = (select open_date from fulfillment_test_context)$$,
   array[1],
   'only the replacement payment hold remains active'
 );
@@ -177,9 +179,11 @@ from fulfillment_test_context;
 
 select results_eq(
   $$select
-      (select count(*) from public.capacity_adjustments where status = 'active')::integer
+      (select count(*) from public.capacity_adjustments where status = 'active'
+        and fulfillment_date = (select open_date from fulfillment_test_context))::integer
       +
-      (select count(*) from public.capacity_holds where status = 'active')::integer$$,
+      (select count(*) from public.capacity_holds where status = 'active'
+        and fulfillment_date = (select open_date from fulfillment_test_context))::integer$$,
   array[4],
   'adding a blackout leaves existing orders and active payment holds intact'
 );

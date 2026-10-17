@@ -9,7 +9,7 @@ import {
   reservePayment,
 } from "@/lib/payments/review";
 import { attemptView, reconcilePayment } from "@/lib/payments/processor";
-import { paymentConfiguration } from "@/lib/payments/configuration";
+import { resolvedPaymentConfiguration } from "@/lib/payments/server-configuration";
 import { getServerEnvironment } from "@/lib/env/server";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const token = request.cookies.get(CHECKOUT_DRAFT_COOKIE)?.value;
     const attempt = await currentAttempt(token);
     if (attempt && !["expired", "refunded"].includes(attempt.status)) {
-      const config = paymentConfiguration(getServerEnvironment());
+      const config = await resolvedPaymentConfiguration(getServerEnvironment());
       return paymentResponse({
         review: {
           snapshot: null,
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       request.cookies.get(CHECKOUT_DRAFT_COOKIE)?.value,
       input.data,
     );
-    const config = paymentConfiguration(getServerEnvironment());
+    const config = await resolvedPaymentConfiguration(getServerEnvironment());
     return paymentResponse({
       attempt: await attemptView(attempt, config.blockers.length === 0),
     });

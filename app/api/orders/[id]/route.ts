@@ -11,6 +11,7 @@ import {
 } from "@/lib/payments/order-access";
 import { paymentResponse, paymentFailure } from "@/lib/payments/http";
 import { readCheckoutJson } from "@/lib/security/json-request";
+import { getCustomerIdentity } from "@/lib/customer/identity";
 
 type Context = { params: Promise<{ id: string }> };
 export async function GET(request: NextRequest, context: Context) {
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest, context: Context) {
         id,
         request.cookies.get(orderCookieName(id))?.value,
         request.cookies.get(CHECKOUT_DRAFT_COOKIE)?.value,
+        (await getCustomerIdentity())?.id,
       ),
     });
   } catch (error) {

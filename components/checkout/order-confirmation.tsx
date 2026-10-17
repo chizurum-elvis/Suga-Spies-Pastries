@@ -15,11 +15,14 @@ import {
   PurchaseSummary,
   DeliverySummary,
 } from "@/components/checkout/purchase-summary";
-import { formatBusinessDateTime } from "@/lib/i18n/format";
-import { businessConfig } from "@/lib/config/business";
+import { usePublicContact } from "@/components/content/contact-provider";
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { OrderTimeline } from "@/components/orders/order-timeline";
+import { CancellationControl } from "@/components/orders/cancellation-control";
+import { RefundStatus } from "@/components/orders/refund-status";
+import { RedeliveryControl } from "@/components/orders/redelivery-control";
+import { orderPaymentLabel } from "@/lib/orders/cancellation";
 import {
   fulfillmentStage,
   nextFulfillmentStatus,
@@ -27,6 +30,7 @@ import {
 } from "@/lib/orders/status";
 
 export function PaymentConfirmation() {
+  const contact = usePublicContact();
   const router = useRouter();
   const [message, setMessage] = useState(
     "We’re checking your payment. Please don’t pay again.",
@@ -57,7 +61,10 @@ export function PaymentConfirmation() {
         setTerminal(true);
         return;
       }
-      const attempt = paymentAttemptViewSchema.parse(body.attempt);
+      const parsedAttempt = paymentAttemptViewSchema.safeParse(body.attempt);
+      if (!parsedAttempt.success)
+        throw new Error("Payment status could not be verified. Please retry.");
+      const attempt = parsedAttempt.data;
       if (attempt.orderId) {
         router.replace(`/orders/${attempt.orderId}`);
         return;
@@ -121,11 +128,8 @@ export function PaymentConfirmation() {
       </Link>
       <p className="text-ink-soft text-sm">
         Need help?{" "}
-        <a
-          className="text-brand font-bold underline"
-          href={businessConfig.supportPhoneHref}
-        >
-          {businessConfig.supportPhoneDisplay}
+        <a className="text-brand font-bold underline" href={contact.phoneHref}>
+          {contact.phone}
         </a>
       </p>
     </div>
@@ -133,6 +137,7 @@ export function PaymentConfirmation() {
 }
 
 export function GuestOrder({ id }: { id: string }) {
+  const contact = usePublicContact();
   const [order, setOrder] = useState<OrderView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -140,6 +145,7 @@ export function GuestOrder({ id }: { id: string }) {
   const [announcement, setAnnouncement] = useState("");
   const access = useRef<string | null>(null);
   const orderRef = useRef<OrderView | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const inFlight = useRef(false);
   const { hydrated, clearPurchasedCart } = useCart();
   const load = useCallback(async () => {
@@ -176,13 +182,22 @@ export function GuestOrder({ id }: { id: string }) {
         throw new Error(
           body?.error?.message ?? "Your order could not be loaded.",
         );
-      const nextOrder = orderViewSchema.parse(body.order);
+      const parsedOrder = orderViewSchema.safeParse(body.order);
+      if (!parsedOrder.success)
+        throw new Error("Order details could not be verified. Please retry.");
+      const nextOrder = parsedOrder.data;
+      if (orderRef.current && nextOrder.version < orderRef.current.version)
+        return;
       if (
         orderRef.current &&
-        orderRef.current.fulfillmentStatus !== nextOrder.fulfillmentStatus
+        (orderRef.current.fulfillmentStatus !== nextOrder.fulfillmentStatus ||
+          orderRef.current.status !== nextOrder.status ||
+          orderRef.current.paymentStatus !== nextOrder.paymentStatus)
       ) {
         setAnnouncement(
-          `Order updated: ${fulfillmentStage(nextOrder.fulfillmentStatus).label}.`,
+          nextOrder.status === "cancelled"
+            ? `Order cancelled. ${orderPaymentLabel(nextOrder.paymentStatus)}.`
+            : `Order updated: ${fulfillmentStage(nextOrder.fulfillmentStatus).label}.`,
         );
       }
       orderRef.current = nextOrder;
@@ -235,6 +250,8 @@ export function GuestOrder({ id }: { id: string }) {
       />
     );
   const currentStage = fulfillmentStage(order.fulfillmentStatus);
+  const cancelled = order.status === "cancelled";
+  const discarded = order.status === "discarded";
   const nextStatus = nextFulfillmentStatus(order.fulfillmentStatus);
   const nextStage = nextStatus ? fulfillmentStage(nextStatus) : null;
   return (
@@ -246,20 +263,50 @@ export function GuestOrder({ id }: { id: string }) {
         <p className="text-brand text-sm font-bold">
           {order.snapshot.testOnly
             ? "Development test order"
-            : "Payment received"}{" "}
+            : orderPaymentLabel(order.paymentStatus)}{" "}
           · {order.orderNumber}
         </p>
-        <h1 className="font-display mt-2 text-4xl sm:text-5xl">
-          {order.snapshot.testOnly ? "Test order" : currentStage.label}
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="font-display mt-2 text-4xl sm:text-5xl"
+        >
+          {cancelled || discarded
+            ? cancelled
+              ? "Order cancelled"
+              : "Delivery closed"
+            : order.snapshot.testOnly
+              ? "Test order"
+              : currentStage.label}
         </h1>
         <p className="text-ink-soft mt-3 text-sm">
           {order.snapshot.testOnly
             ? "This is a test record, not a real pastry order."
-            : currentStage.summary}
+            : cancelled || discarded
+              ? "No further delivery will take place. Your refund status is below."
+              : currentStage.summary}
         </p>
       </header>
       <div className="grid items-start gap-8 lg:grid-cols-2">
         <div className="min-w-0 space-y-6">
+          {order.refund ? <RefundStatus refund={order.refund} /> : null}
+          {order.redelivery ? (
+            <RedeliveryControl
+              order={order}
+              onUpdate={(updated) => {
+                if (
+                  !orderRef.current ||
+                  updated.version >= orderRef.current.version
+                ) {
+                  orderRef.current = updated;
+                  setOrder(updated);
+                  setAnnouncement(
+                    "Redelivery request saved. The owner will choose a date.",
+                  );
+                }
+              }}
+            />
+          ) : null}
           <section aria-labelledby="status-heading">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -297,6 +344,7 @@ export function GuestOrder({ id }: { id: string }) {
               <OrderTimeline
                 currentStatus={order.fulfillmentStatus}
                 events={order.events}
+                cancelled={cancelled || discarded}
               />
             </div>
           </section>
@@ -310,7 +358,16 @@ export function GuestOrder({ id }: { id: string }) {
                   Payment
                 </dt>
                 <dd className="mt-2">
-                  <StatusIndicator label="Paid" tone="success" />
+                  <StatusIndicator
+                    label={orderPaymentLabel(order.paymentStatus)}
+                    tone={
+                      order.paymentStatus === "refund_failed"
+                        ? "critical"
+                        : order.paymentStatus === "refund_pending"
+                          ? "pending"
+                          : "success"
+                    }
+                  />
                 </dd>
               </div>
               <div className="border-border bg-surface rounded-md border p-4">
@@ -320,7 +377,13 @@ export function GuestOrder({ id }: { id: string }) {
                 <dd className="mt-2">
                   <StatusIndicator
                     label={orderStatusLabel(order.status)}
-                    tone={order.status === "completed" ? "success" : "active"}
+                    tone={
+                      cancelled || discarded
+                        ? "neutral"
+                        : order.status === "completed"
+                          ? "success"
+                          : "active"
+                    }
                   />
                 </dd>
               </div>
@@ -330,41 +393,101 @@ export function GuestOrder({ id }: { id: string }) {
                 </dt>
                 <dd className="mt-2">
                   <StatusIndicator
-                    label={currentStage.label}
+                    label={
+                      cancelled || discarded ? "Stopped" : currentStage.label
+                    }
                     tone={
-                      order.fulfillmentStatus === "delivered"
-                        ? "success"
-                        : "active"
+                      cancelled || discarded
+                        ? "neutral"
+                        : order.fulfillmentStatus === "delivered"
+                          ? "success"
+                          : "active"
                     }
                   />
                 </dd>
               </div>
             </dl>
           </section>
-          <DeliverySummary snapshot={order.snapshot} />
+          <DeliverySummary
+            snapshot={order.snapshot}
+            cancelled={cancelled || discarded || Boolean(order.redelivery)}
+          />
           <section>
             <h2 className="font-display text-brand-strong text-2xl">
               What happens next?
             </h2>
             <p className="text-ink-soft mt-3 text-sm leading-6">
-              {nextStage
-                ? `Next: ${nextStage.label}. ${nextStage.summary}`
-                : "This delivery is complete. Please contact us if you need help with the order."}
-            </p>
-            <p className="mt-3 text-sm leading-6">
-              Cancellation deadline:{" "}
-              {formatBusinessDateTime(order.snapshot.cancellationDeadline)}.
+              {cancelled || discarded
+                ? "This order is closed. Its refund status is shown above; no further delivery will take place."
+                : order.redelivery
+                  ? order.redelivery.state === "awaiting_customer"
+                    ? "Confirm or correct the delivery address above within 24 hours."
+                    : order.redelivery.state === "awaiting_owner"
+                      ? "The owner will choose an available date."
+                      : order.redelivery.state === "awaiting_payment"
+                        ? "Pay the extra delivery fee above to confirm the owner-selected date."
+                        : order.redelivery.state === "payment_review"
+                          ? "Please contact us while we review your payment. Do not pay again."
+                          : order.redelivery.state === "scheduled"
+                            ? "Your pastries are scheduled for another delivery attempt."
+                            : "Follow the live delivery updates above."
+                  : nextStage
+                    ? `Next: ${nextStage.label}. ${nextStage.summary}`
+                    : "This delivery is complete. Please contact us if you need help with the order."}
             </p>
             <p className="mt-3 text-sm">
               Questions?{" "}
               <a
                 className="text-brand font-bold underline"
-                href={businessConfig.supportPhoneHref}
+                href={contact.phoneHref}
               >
-                {businessConfig.supportPhoneDisplay}
+                {contact.phone}
               </a>
             </p>
           </section>
+          {!order.redelivery && !discarded ? (
+            <CancellationControl
+              orderNumber={order.orderNumber}
+              status={order.status}
+              fulfillmentStatus={order.fulfillmentStatus}
+              deadline={order.snapshot.cancellationDeadline}
+              amountCents={order.snapshot.totalCents}
+              onConfirm={async () => {
+                const response = await fetch(`/api/orders/${id}/cancel`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  cache: "no-store",
+                  body: JSON.stringify({
+                    expectedVersion: orderRef.current?.version ?? order.version,
+                    confirmed: true,
+                  }),
+                });
+                const body = await response.json();
+                if (!response.ok) {
+                  void load();
+                  return (
+                    body?.error?.message ??
+                    "Cancellation could not be confirmed. Please refresh the order."
+                  );
+                }
+                const updated = orderViewSchema.parse(body.order);
+                if (
+                  !orderRef.current ||
+                  updated.version >= orderRef.current.version
+                ) {
+                  orderRef.current = updated;
+                  setOrder(updated);
+                  setAnnouncement(
+                    `Order cancelled. ${orderPaymentLabel(updated.paymentStatus)}.`,
+                  );
+                  window.requestAnimationFrame(() =>
+                    headingRef.current?.focus(),
+                  );
+                }
+                return null;
+              }}
+            />
+          ) : null}
           <Link
             href="/menu"
             className={buttonVariants({ variant: "secondary" })}

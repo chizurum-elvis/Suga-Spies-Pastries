@@ -57,6 +57,7 @@ export async function updateDeliveryPricing(
       "Delivery pricing changed in another tab. Refresh before editing it.",
     );
   revalidatePath("/admin/delivery");
+  revalidatePath("/admin/settings");
   return state(
     "success",
     "Delivery pricing saved. Customers with older quotes must review the updated fee before continuing.",

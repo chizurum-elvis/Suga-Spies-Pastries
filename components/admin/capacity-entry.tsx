@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 
 import { FulfillmentActionMessage } from "@/components/admin/fulfillment-action-message";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,14 @@ export function CapacityEntry({ entry }: { entry: AdminCapacityAdjustment }) {
             <p className="text-ink-faint mt-1 text-xs">{entry.internalNote}</p>
           ) : null}
         </div>
-        {entry.source !== "website" ? (
+        {entry.trackedOrderId ? (
+          <Link
+            href={`/admin/external-orders/${entry.trackedOrderId}`}
+            className="text-brand-strong inline-flex min-h-10 items-center text-sm font-bold underline"
+          >
+            View order
+          </Link>
+        ) : entry.source !== "website" ? (
           <form action={action}>
             <input type="hidden" name="id" value={entry.id} />
             <Button

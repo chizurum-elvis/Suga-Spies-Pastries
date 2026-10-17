@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { notFound } from "next/navigation";
 
@@ -67,9 +67,7 @@ export default async function EditProductPage({
           <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl">
             {product.name}
           </h1>
-          <p className="text-ink-faint mt-2 text-xs">
-            Version {product.version} · /menu/{product.slug}
-          </p>
+          <p className="text-ink-faint mt-2 text-xs">/menu/{product.slug}</p>
         </div>
         {product.status === "published" ? (
           <Link
@@ -117,9 +115,8 @@ export default async function EditProductPage({
       <Card tone="admin" padding="lg">
         <h2 className="text-lg font-extrabold">Product photography</h2>
         <p className="text-ink-soft mt-2 text-sm leading-6">
-          The first image is used as the primary catalogue image. Uploads are
-          owner-only and validated by file size, declared type, and file
-          signature.
+          Choose a clear photo of this pastry. The primary image appears in the
+          menu.
         </p>
         <div className="mt-6">
           <ProductImagesManager
@@ -131,8 +128,8 @@ export default async function EditProductPage({
       <Card tone="admin" padding="lg">
         <h2 className="text-lg font-extrabold">Purchasable choices</h2>
         <p className="text-ink-soft mt-2 text-sm leading-6">
-          These choices appear on the product page now and will become validated
-          cart selections in the next slice.
+          Customers can select these sizes, flavours, and extras before adding a
+          pastry to their box. Only add choices you offer.
         </p>
         <div className="mt-6">
           <ProductOptionsManager

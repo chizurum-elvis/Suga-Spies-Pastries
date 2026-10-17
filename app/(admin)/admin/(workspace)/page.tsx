@@ -1,176 +1,337 @@
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 import {
-  CalendarCheck2,
-  LockKeyhole,
-  ShieldCheck,
+  ArrowRight,
+  CalendarDays,
+  ChefHat,
+  ClipboardList,
   ShoppingBag,
 } from "lucide-react";
-import Link from "next/link";
-
-import { Badge } from "@/components/ui/badge";
+import { AdminPageHeading } from "@/components/admin/page-heading";
 import { Card } from "@/components/ui/card";
-import { StatusIndicator } from "@/components/ui/status-indicator";
-import { BUSINESS_TIME_ZONE } from "@/lib/config/business";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { requireOwnerSession } from "@/lib/auth/session";
+import { getOverviewData } from "@/lib/admin/overview-data";
+import {
+  getTorontoLocalDate,
+  parseLocalDate,
+  addCalendarDays,
+  addCalendarMonths,
+  formatLocalDateLabel,
+} from "@/lib/fulfillment/rules";
+import { formatCurrency } from "@/lib/i18n/format";
+import { fulfillmentStage } from "@/lib/orders/status";
 
-const readinessItems = [
-  {
-    title: "Owner access",
-    description:
-      "Identity, active owner membership, and route access are verified on the server",
-    icon: ShieldCheck,
-    status: "Protected",
-    tone: "success" as const,
-  },
-  {
-    title: "Business scheduling",
-    description: `Live dates, blackouts, and four-order capacity are evaluated in ${BUSINESS_TIME_ZONE}`,
-    icon: CalendarCheck2,
-    status: "Connected",
-    tone: "success" as const,
-  },
-  {
-    title: "Paid orders",
-    description:
-      "Verified paid orders and delivery details are available only inside the protected owner workspace",
-    icon: ShoppingBag,
-    status: "Connected",
-    tone: "success" as const,
-  },
-] as const;
-
-export default function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    date?: string;
+    from?: string;
+    to?: string;
+    mode?: string;
+  }>;
+}) {
+  const owner = await requireOwnerSession("/admin");
+  const supplied = await searchParams;
+  const today = getTorontoLocalDate();
+  const testOnly = supplied.mode === "test";
+  const valid = (value?: string) =>
+    typeof value === "string" && parseLocalDate(value) ? value : null;
+  const requested = valid(supplied.date);
+  const date =
+    requested && requested >= today && requested <= addCalendarMonths(today, 2)
+      ? requested
+      : today;
+  const from = valid(supplied.from) ?? today.slice(0, 8) + "01";
+  const requestedTo = valid(supplied.to) ?? today;
+  const to =
+    requestedTo >= from && requestedTo <= addCalendarDays(from, 366)
+      ? requestedTo
+      : from;
+  const data = await getOverviewData({ date, from, to, testOnly });
+  const day = data.kitchen.days[0];
+  const capacity = data.calendar.days[0]!;
+  const money = (cents: number) => formatCurrency(cents / 100);
+  const attention = [
+    {
+      count: data.failedDeliveries,
+      text: "Failed deliveries or redelivery requests",
+    },
+    { count: data.refunds, text: "Refunds needing review" },
+    { count: data.paymentIssues, text: "Payments needing review" },
+    { count: data.emailFailures, text: "Emails not delivered (all orders)" },
+  ].filter((item) => item.count > 0);
   return (
-    <div className="grid gap-8">
-      <header
-        id="overview"
-        className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"
-      >
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="accent">Protected owner workspace</Badge>
-            <Badge>Order data protected</Badge>
-          </div>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl">
-            Owner workspace
-          </h1>
-          <p className="text-ink-soft mt-3 max-w-2xl text-sm leading-6 sm:text-base">
-            Owner access, menu operations, fulfillment availability, and paid
-            order records are connected. Production planning remains a later
-            vertical slice.
-          </p>
-        </div>
-        <StatusIndicator label="Access verified" tone="success" />
-      </header>
-
-      <section aria-labelledby="readiness-heading">
-        <h2
-          id="readiness-heading"
-          className="text-lg font-extrabold tracking-[-0.02em]"
+    <div className="grid gap-7">
+      <AdminPageHeading
+        title="Overview"
+        description={`Hello, ${owner.displayName ?? "there"}. Here is what needs your attention at the bakery.`}
+        action={
+          <Link
+            href="/admin/production"
+            className={buttonVariants({ variant: "primary", size: "sm" })}
+          >
+            <ChefHat className="size-4" aria-hidden="true" />
+            Open kitchen plan
+          </Link>
+        }
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <p className="text-ink-soft">{formatLocalDateLabel(today)} · Toronto</p>
+        <Link
+          className="text-brand-strong min-h-11 content-center font-bold underline underline-offset-4"
+          href={testOnly ? "/admin" : "/admin?mode=test"}
         >
-          System readiness
-        </h2>
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          {readinessItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Card key={item.title} tone="admin" className="min-w-0">
-                <div className="flex items-start justify-between gap-4">
-                  <span className="bg-canvas-strong text-brand-strong grid size-10 shrink-0 place-items-center rounded-md">
-                    <Icon className="size-5" aria-hidden="true" />
-                  </span>
-                  <StatusIndicator label={item.status} tone={item.tone} />
-                </div>
-                <h3 className="text-ink mt-5 font-extrabold">{item.title}</h3>
-                <p className="text-ink-soft mt-2 text-sm leading-6">
-                  {item.description}
-                </p>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
-
-      <section id="orders" aria-labelledby="orders-heading">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2
-            id="orders-heading"
-            className="text-lg font-extrabold tracking-[-0.02em]"
-          >
-            Orders
-          </h2>
-          <Badge tone="accent">Connected</Badge>
-        </div>
-        <Card tone="admin" padding="lg">
-          <p className="text-ink-soft text-sm leading-6">
-            Open confirmed orders, delivery details, payment exceptions, and
-            email-delivery status. Test orders are marked clearly.
-          </p>
-          <Link
-            href="/admin/orders"
-            className="text-brand-strong mt-4 inline-flex min-h-11 items-center text-sm font-bold underline underline-offset-4"
-          >
-            View pastry orders
+          {testOnly ? "Show live orders" : "Show test orders"}
+        </Link>
+      </div>
+      {testOnly ? (
+        <Badge tone="warning">Test orders — not real customer orders</Badge>
+      ) : null}
+      {!data.acceptingOrders ? (
+        <div
+          role="status"
+          className="border-warning-ink/20 bg-warning/40 rounded-lg border p-4"
+        >
+          <strong>New orders are paused.</strong> Existing orders continue as
+          normal.{" "}
+          <Link href="/admin/settings" className="font-bold underline">
+            Manage ordering
           </Link>
-        </Card>
-      </section>
-
+        </div>
+      ) : null}
       <section
-        id="production"
-        aria-labelledby="production-heading"
-        className="grid gap-4 lg:grid-cols-2"
+        aria-label="Bakery at a glance"
+        className="grid grid-cols-2 gap-3 xl:grid-cols-4"
       >
-        <Card tone="admin" padding="lg">
-          <h2
-            id="production-heading"
-            className="text-lg font-extrabold tracking-[-0.02em]"
-          >
-            Production view
-          </h2>
-          <p className="text-ink-soft mt-3 text-sm leading-6">
-            Future production totals will be derived from paid, non-cancelled
-            orders and grouped by product, flavour, delivery date, and
-            fulfillment mode.
-          </p>
-        </Card>
-        <Card id="availability" tone="admin" padding="lg">
-          <h2 className="text-lg font-extrabold tracking-[-0.02em]">
-            Availability
-          </h2>
-          <p className="text-ink-soft mt-3 text-sm leading-6">
-            The protected availability calendar now combines closures, manual
-            blackouts, external orders, active holds, and the hard daily limit.
-          </p>
+        {[
+          {
+            label: "Deliveries today",
+            value: data.orders.filter(
+              (order) =>
+                order.delivery_date === today &&
+                order.fulfillment_status !== "delivered",
+            ).length,
+            icon: ShoppingBag,
+            href: "/admin/orders?date=" + today,
+          },
+          {
+            label: "Awaiting preparation",
+            value: data.awaitingPreparation,
+            icon: ChefHat,
+            href: "/admin/orders?status=received",
+          },
+          {
+            label: "Today's reserved spaces",
+            value: `${capacity.consumed} / ${data.calendar.settings.dailyCapacity}`,
+            icon: CalendarDays,
+            href: "/admin/availability",
+          },
+          {
+            label: "Pastries in selected plan",
+            value: day?.pieceCount ?? 0,
+            icon: ClipboardList,
+            href: "/admin/production?from=" + date + "&to=" + date,
+          },
+        ].map((item) => (
           <Link
-            href="/admin/availability"
-            className="text-brand-strong mt-4 inline-flex min-h-11 items-center text-sm font-bold underline underline-offset-4"
+            key={item.label}
+            href={
+              item.href +
+              (testOnly
+                ? (item.href.includes("?") ? "&" : "?") + "mode=test"
+                : "")
+            }
+            className="border-border hover:border-brand/40 rounded-lg border bg-white p-4 transition-colors sm:p-5"
           >
-            Manage availability
+            <item.icon className="text-brand mb-3 size-4" aria-hidden="true" />
+            <p className="text-ink-soft text-sm">{item.label}</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{item.value}</p>
+          </Link>
+        ))}
+      </section>
+      {attention.length ? (
+        <section className="border-warning-ink/20 bg-warning/30 rounded-lg border p-5">
+          <h2>Needs attention</h2>
+          <ul className="mt-3 grid gap-2">
+            {attention.map((item) => (
+              <li key={item.text}>
+                <Link
+                  href="/admin/orders#attention"
+                  className="inline-flex min-h-11 items-center gap-3 text-sm underline underline-offset-4"
+                >
+                  <strong>{item.count}</strong>
+                  {item.text}
+                  <ArrowRight className="size-4 shrink-0" aria-hidden="true" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <Card tone="admin">
+          <div className="flex flex-wrap justify-between gap-2">
+            <h2>Upcoming deliveries</h2>
+            <Link
+              href={testOnly ? "/admin/orders?mode=test" : "/admin/orders"}
+              className="text-brand-strong font-bold underline underline-offset-4"
+            >
+              All orders
+            </Link>
+          </div>
+          <p className="text-ink-soft mt-1 text-xs">Next 14 days</p>
+          {data.orders.length ? (
+            <ul className="divide-border mt-4 divide-y">
+              {data.orders.slice(0, 12).map((order) => (
+                <li key={order.id}>
+                  <Link
+                    href={`/admin/orders/${order.id}`}
+                    className="grid gap-2 py-4 sm:grid-cols-[1fr_auto]"
+                  >
+                    <div>
+                      <p className="text-brand-strong font-bold">
+                        {order.order_number} · {order.contact_name}
+                      </p>
+                      <p className="text-ink-soft mt-1 text-xs">
+                        {formatLocalDateLabel(order.delivery_date)}
+                      </p>
+                    </div>
+                    <span className="text-ink-soft text-xs">
+                      {fulfillmentStage(order.fulfillment_status).label}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-ink-soft py-8 text-sm leading-6">
+              No upcoming {testOnly ? "test" : "live"} deliveries. Confirmed
+              orders will appear here after payment.
+            </p>
+          )}
+        </Card>
+        <Card tone="admin">
+          <h2>What to bake and pack</h2>
+          <form
+            className="admin-chrome mt-4 grid gap-3 sm:grid-cols-[1fr_auto]"
+            method="get"
+            aria-label="Choose overview kitchen date"
+          >
+            <input
+              type="hidden"
+              name="mode"
+              value={testOnly ? "test" : "live"}
+            />
+            <label className="grid gap-1 text-xs font-bold">
+              Delivery date
+              <input
+                type="date"
+                name="date"
+                defaultValue={date}
+                min={today}
+                max={addCalendarMonths(today, 2)}
+                required
+                className="border-border-strong min-w-0 border bg-white px-3"
+              />
+            </label>
+            <button
+              className={buttonVariants({
+                variant: "secondary",
+                size: "sm",
+                className: "self-end",
+              })}
+            >
+              Show
+            </button>
+          </form>
+          {day?.lines.length ? (
+            <ul className="divide-border mt-4 divide-y">
+              {day.lines.map((line) => (
+                <li key={line.key} className="flex justify-between gap-4 py-3">
+                  <span>
+                    {line.name}
+                    {line.variant ? ` · ${line.variant}` : ""}
+                  </span>
+                  <strong className="tabular-nums">{line.quantity}×</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-ink-soft py-8 text-sm">
+              No paid pastries to prepare on this date.
+            </p>
+          )}
+          <Link
+            href={`/admin/production?from=${date}&to=${date}${testOnly ? "&mode=test" : ""}`}
+            className="text-brand-strong inline-flex min-h-11 items-center gap-2 font-bold underline underline-offset-4"
+          >
+            Full plan and customizations{" "}
+            <ArrowRight className="size-4" aria-hidden="true" />
           </Link>
         </Card>
-      </section>
-
-      <section id="settings" aria-labelledby="settings-heading">
-        <Card tone="admin" padding="lg">
-          <div className="flex items-start gap-4">
-            <span className="bg-brand-soft text-brand-strong grid size-10 shrink-0 place-items-center rounded-md">
-              <LockKeyhole className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2
-                id="settings-heading"
-                className="text-lg font-extrabold tracking-[-0.02em]"
-              >
-                Security boundary
-              </h2>
-              <p className="text-ink-soft mt-2 max-w-3xl text-sm leading-6">
-                The owner identity is verified through Supabase Auth and an
-                active database allow-list protected by Row Level Security.
-                Every future data action must still repeat authorization near
-                its query or mutation and write an appropriate audit record.
-              </p>
+      </div>
+      <Card tone="admin">
+        <h2>Sales summary</h2>
+        <p className="text-ink-soft mt-1 text-xs">
+          Orders placed in this range and completed refunds against those
+          orders. Redelivery fees are excluded. This is not profit or a Stripe
+          payout.
+        </p>
+        <form
+          className="admin-chrome mt-4 flex flex-wrap items-end gap-3"
+          method="get"
+          aria-label="Choose sales dates"
+        >
+          <input type="hidden" name="mode" value={testOnly ? "test" : "live"} />
+          {[
+            { name: "from", label: "From", value: from },
+            { name: "to", label: "To", value: to },
+          ].map((field) => (
+            <label key={field.name} className="grid gap-1 text-xs font-bold">
+              {field.label}
+              <input
+                type="date"
+                name={field.name}
+                defaultValue={field.value}
+                required
+                className="border-border-strong border bg-white px-3"
+              />
+            </label>
+          ))}
+          <button
+            className={buttonVariants({ variant: "secondary", size: "sm" })}
+          >
+            Update summary
+          </button>
+        </form>
+        <dl className="mt-6 grid grid-cols-2 gap-5 xl:grid-cols-5">
+          {[
+            { label: "Orders", value: data.sales.orders },
+            { label: "Total collected", value: money(data.sales.salesCents) },
+            {
+              label: "Delivery included",
+              value: money(data.sales.deliveryCents),
+            },
+            {
+              label: "Refunds completed",
+              value: money(data.sales.refundCents),
+            },
+            {
+              label: "After refunds",
+              value: money(data.sales.salesCents - data.sales.refundCents),
+            },
+          ].map((item) => (
+            <div key={item.label}>
+              <dt className="text-ink-soft text-xs">{item.label}</dt>
+              <dd className="mt-2 text-xl font-bold tabular-nums">
+                {item.value}
+              </dd>
             </div>
-          </div>
-        </Card>
-      </section>
+          ))}
+        </dl>
+      </Card>
     </div>
   );
 }

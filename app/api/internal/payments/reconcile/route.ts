@@ -3,6 +3,11 @@ import { createSecretSupabaseClient } from "@/lib/supabase/secret";
 import { reconcilePayment } from "@/lib/payments/processor";
 import { sendOrderNotifications } from "@/lib/payments/notifications";
 import { isAuthorizedPaymentWorker } from "@/lib/payments/worker-auth";
+import {
+  processOrderRefunds,
+  processRedeliveryFeeRefunds,
+} from "@/lib/orders/refund-processor";
+import { reconcileRedeliveryPayment } from "@/lib/orders/redelivery";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -67,11 +72,44 @@ async function reconcilePayments(request: Request) {
     }),
   );
   let notifications;
+  let refunds;
+  let redeliveryRefunds;
+  let redeliveries = 0;
   try {
-    [, notifications] = await Promise.all([
+    const overdue = await db.rpc("expire_failed_deliveries", { p_limit: 4 });
+    if (overdue.error)
+      throw new Error("Failed-delivery deadline worker unavailable.");
+    const feeDue = await db
+      .from("order_redeliveries")
+      .select("*")
+      .eq("state", "awaiting_payment")
+      .eq("payment_status", "pending")
+      .not("payment_expires_at", "is", null)
+      .lte("payment_expires_at", new Date().toISOString())
+      .limit(4);
+    if (feeDue.error) throw new Error("Redelivery payment worker unavailable.");
+    for (const row of feeDue.data) {
+      try {
+        if (row.stripe_session_id) await reconcileRedeliveryPayment(row);
+        else {
+          const expired = await db.rpc("expire_unstarted_redelivery_payment", {
+            p_order_id: row.order_id,
+          });
+          if (expired.error)
+            throw new Error("Redelivery hold could not be released.");
+        }
+        redeliveries++;
+      } catch {
+        failures++;
+      }
+    }
+    [, notifications, refunds, redeliveryRefunds] = await Promise.all([
       paymentWork,
       sendOrderNotifications(),
+      processOrderRefunds(),
+      processRedeliveryFeeRefunds(),
     ]);
+    failures += refunds.failures + redeliveryRefunds.failures;
     if (!failures) {
       const health = await db.from("payment_worker_health").upsert({
         mode: testOnly ? "test" : "live",
@@ -84,7 +122,14 @@ async function reconcilePayments(request: Request) {
     return new Response("Worker unavailable", { status: 503 });
   }
   return Response.json(
-    { checked: due.data.length, failures, notifications },
+    {
+      checked: due.data.length,
+      redeliveries,
+      failures,
+      notifications,
+      refunds,
+      redeliveryRefunds,
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 import { Plus, Search, SlidersHorizontal } from "lucide-react";
 
 import { CategoryForm } from "@/components/admin/category-form";
@@ -51,9 +51,8 @@ export default async function MenuAdminPage({
     <div className="grid gap-8">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Badge tone="accent">Catalogue</Badge>
           <h1 className="mt-4 text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl">
-            Menu management
+            Menu
           </h1>
           <p className="text-ink-soft mt-3 max-w-2xl text-sm leading-6">
             Manage the pastry details customers see. Publication and
@@ -62,13 +61,13 @@ export default async function MenuAdminPage({
         </div>
         <Link href="/admin/menu/new" className={buttonVariants({ size: "lg" })}>
           <Plus className="size-4" aria-hidden="true" />
-          Create product
+          Add pastry
         </Link>
       </header>
 
       <Card tone="admin" padding="md">
         <form
-          className="grid gap-3 lg:grid-cols-[minmax(14rem,1fr)_repeat(3,minmax(9rem,0.35fr))_auto]"
+          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1fr)_repeat(3,minmax(8rem,0.35fr))_auto]"
           action="/admin/menu"
         >
           <label className="relative">
@@ -213,8 +212,8 @@ export default async function MenuAdminPage({
             Categories
           </h2>
           <p className="text-ink-soft mt-2 text-sm leading-6">
-            Add a grouping before assigning products to it. Existing category
-            slugs remain stable for navigation.
+            Group related pastries so customers can browse easily. Add a
+            category here, then choose it when editing a pastry.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             {categories.map((category) => (

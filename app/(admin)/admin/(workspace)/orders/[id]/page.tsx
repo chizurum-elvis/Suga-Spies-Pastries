@@ -1,10 +1,19 @@
 import { randomUUID } from "node:crypto";
-import Link from "next/link";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 import { ArrowLeft, BellRing, CircleAlert } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { NotificationRetryButton } from "@/components/admin/notification-retry-button";
+import { PrintButton } from "@/components/admin/print-button";
 import { OrderStatusControl } from "@/components/admin/order-status-control";
+import {
+  OwnerCancellationControl,
+  RefundCheckControl,
+} from "@/components/admin/order-cancellation-controls";
+import { RefundStatus } from "@/components/orders/refund-status";
+import { RedeliveryAdminControls } from "@/components/admin/redelivery-controls";
+import { orderPaymentLabel } from "@/lib/orders/cancellation";
+import { orderView } from "@/lib/payments/order-access";
 import {
   DeliverySummary,
   PurchaseSummary,
@@ -18,6 +27,9 @@ import { formatBusinessDateTime } from "@/lib/i18n/format";
 import {
   retryOrderNotification,
   transitionOrderFulfillment,
+  markOwnerDeliveryFailed,
+  chooseOwnerRedeliveryDate,
+  setOwnerRedeliveryOutcome,
 } from "@/lib/orders/actions";
 import {
   fulfillmentStage,
@@ -34,10 +46,24 @@ function notificationLabel(kind: string) {
     customer_ready: "Ready-for-delivery update to customer",
     customer_out_for_delivery: "Out-for-delivery update to customer",
     customer_delivered: "Delivered update to customer",
+    customer_cancelled: "Cancellation confirmation to customer",
+    owner_cancellation: "Cancellation alert to owner",
+    owner_refund_attention: "Refund attention alert to owner",
     owner_order: "New-order alert to owner",
     owner_exception: "Payment exception alert to owner",
+    customer_delivery_failed: "Failed-delivery update to customer",
+    owner_delivery_failed: "Failed-delivery alert to owner",
+    customer_redelivery_requested: "Redelivery request update to customer",
+    owner_redelivery_requested: "Redelivery request alert to owner",
+    customer_redelivery_date_selected: "Redelivery date update to customer",
+    customer_redelivery_scheduled: "Redelivery confirmation to customer",
+    customer_redelivery_out_for_delivery:
+      "Out-for-redelivery update to customer",
+    customer_order_discarded: "Closed-order update to customer",
   };
-  return labels[kind] ?? "Order email";
+  return kind.startsWith("customer_redelivery_date_selected:")
+    ? "Redelivery date update to customer"
+    : (labels[kind] ?? "Order email");
 }
 
 export default async function Page({
@@ -49,7 +75,14 @@ export default async function Page({
   await requireOwnerSession(`/admin/orders/${id}`);
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = await createServerSupabaseClient();
-  const [orderResult, eventsResult, notificationsResult] = await Promise.all([
+  const [
+    orderResult,
+    eventsResult,
+    notificationsResult,
+    refundResult,
+    redeliveryResult,
+    feeRefundResult,
+  ] = await Promise.all([
     db.from("orders").select("*").eq("id", id).maybeSingle(),
     db
       .from("order_events")
@@ -65,6 +98,13 @@ export default async function Page({
       )
       .eq("order_id", id)
       .order("next_attempt_at", { ascending: true }),
+    db.from("order_refunds").select("*").eq("order_id", id).maybeSingle(),
+    db.from("order_redeliveries").select("*").eq("order_id", id).maybeSingle(),
+    db
+      .from("redelivery_fee_refunds")
+      .select("*")
+      .eq("order_id", id)
+      .maybeSingle(),
   ]);
   if (orderResult.error) throw new Error("Order could not be loaded.");
   if (!orderResult.data) notFound();
@@ -72,6 +112,9 @@ export default async function Page({
     throw new Error("Order timeline could not be loaded.");
   if (notificationsResult.error)
     throw new Error("Notification status could not be loaded.");
+  if (refundResult.error) throw new Error("Refund status could not be loaded.");
+  if (redeliveryResult.error || feeRefundResult.error)
+    throw new Error("Redelivery status could not be loaded.");
 
   const order = orderResult.data;
   const snapshot = purchaseSnapshotSchema.parse(order.snapshot);
@@ -85,6 +128,15 @@ export default async function Page({
     }),
   );
   const stage = fulfillmentStage(order.fulfillment_status);
+  const cancelled =
+    order.status === "cancelled" || order.status === "discarded";
+  const view = orderView(
+    order,
+    eventsResult.data,
+    refundResult.data,
+    redeliveryResult.data,
+    feeRefundResult.data,
+  );
 
   return (
     <div className="space-y-7">
@@ -99,37 +151,107 @@ export default async function Page({
       <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            {order.test_only ? (
-              <Badge tone="warning">Development test</Badge>
-            ) : null}
+            {order.test_only ? <Badge tone="warning">Test order</Badge> : null}
             <StatusIndicator
-              label={stage.label}
+              label={
+                order.status === "discarded"
+                  ? "Delivery closed"
+                  : cancelled
+                    ? "Cancelled"
+                    : stage.label
+              }
               tone={
-                order.fulfillment_status === "delivered" ? "success" : "active"
+                cancelled
+                  ? "neutral"
+                  : order.fulfillment_status === "delivered"
+                    ? "success"
+                    : "active"
               }
             />
-            <StatusIndicator label="Paid" tone="success" />
+            <StatusIndicator
+              label={orderPaymentLabel(order.payment_status)}
+              tone={
+                order.payment_status === "refund_failed"
+                  ? "critical"
+                  : order.payment_status === "refund_pending"
+                    ? "pending"
+                    : "success"
+              }
+            />
           </div>
           <h1 className="mt-3 text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl">
             {order.order_number}
           </h1>
           <p className="text-ink-soft mt-2 text-sm">
-            Placed {formatBusinessDateTime(order.created_at)} · Version{" "}
-            {order.version}
+            Placed {formatBusinessDateTime(order.created_at)}
           </p>
         </div>
-        <OrderStatusControl
-          action={transitionOrderFulfillment}
-          currentStatus={order.fulfillment_status}
-          idempotencyKey={randomUUID()}
-          orderId={order.id}
-          orderNumber={order.order_number}
-          version={order.version}
-        />
+        <PrintButton label="Print order" />
+        {!cancelled && !redeliveryResult.data ? (
+          <OrderStatusControl
+            action={transitionOrderFulfillment}
+            currentStatus={order.fulfillment_status}
+            idempotencyKey={randomUUID()}
+            orderId={order.id}
+            orderNumber={order.order_number}
+            version={order.version}
+          />
+        ) : null}
       </header>
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
         <div className="min-w-0 space-y-6">
+          {view.refund && refundResult.data ? (
+            <Card tone="admin" padding="lg">
+              <RefundStatus refund={view.refund} />
+              <dl className="mt-4 space-y-2 text-sm">
+                <div>
+                  <dt className="text-ink-soft">Refund initiated by</dt>
+                  <dd className="capitalize">
+                    {refundResult.data.requested_by}
+                  </dd>
+                </div>
+                {refundResult.data.reason ? (
+                  <div>
+                    <dt className="text-ink-soft">Private reason</dt>
+                    <dd className="break-words">{refundResult.data.reason}</dd>
+                  </div>
+                ) : null}
+                {refundResult.data.stripe_refund_id ? (
+                  <div>
+                    <dt className="text-ink-soft">Stripe refund reference</dt>
+                    <dd className="font-mono text-xs break-all">
+                      {refundResult.data.stripe_refund_id}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              {["failed", "needs_review"].includes(view.refund.status) ? (
+                <p className="text-critical-ink mt-3 text-sm leading-6">
+                  Check this payment in Stripe before taking further action. The
+                  customer is still owed the full refund. The order stays
+                  closed.
+                </p>
+              ) : null}
+              <RefundCheckControl orderId={order.id} />
+            </Card>
+          ) : null}
+          {view.redelivery?.feeRefund ? (
+            <Card tone="admin" padding="lg">
+              <h2 className="text-lg font-bold">
+                Additional delivery fee refund
+              </h2>
+              <div className="mt-3">
+                <RefundStatus refund={view.redelivery.feeRefund} />
+              </div>
+              {feeRefundResult.data?.stripe_refund_id ? (
+                <p className="text-ink-soft mt-3 font-mono text-xs break-all">
+                  Stripe reference: {feeRefundResult.data.stripe_refund_id}
+                </p>
+              ) : null}
+              <RefundCheckControl orderId={order.id} fee />
+            </Card>
+          ) : null}
           <Card tone="admin" padding="lg">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -147,14 +269,37 @@ export default async function Page({
                 currentStatus={order.fulfillment_status}
                 events={events}
                 compact
+                cancelled={cancelled}
               />
             </div>
           </Card>
 
+          {!cancelled && !redeliveryResult.data ? (
+            <Card tone="admin" padding="lg">
+              <OwnerCancellationControl order={view} />
+            </Card>
+          ) : null}
+
+          {order.fulfillment_status === "out_for_delivery" ||
+          redeliveryResult.data ? (
+            <Card tone="admin" padding="lg">
+              <RedeliveryAdminControls
+                order={view}
+                redelivery={redeliveryResult.data}
+                onFailure={markOwnerDeliveryFailed}
+                onDate={chooseOwnerRedeliveryDate}
+                onOutcome={setOwnerRedeliveryOutcome}
+              />
+            </Card>
+          ) : null}
+
           <Card tone="admin" padding="lg">
             <h2 className="text-lg font-extrabold">Customer and delivery</h2>
             <div className="mt-5">
-              <DeliverySummary snapshot={snapshot} />
+              <DeliverySummary
+                snapshot={snapshot}
+                cancelled={cancelled || Boolean(redeliveryResult.data)}
+              />
             </div>
             <div className="border-border mt-5 border-t pt-5 text-sm leading-6">
               <p className="font-bold">{snapshot.delivery.name}</p>

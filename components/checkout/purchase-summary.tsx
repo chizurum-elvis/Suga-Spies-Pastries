@@ -79,7 +79,13 @@ export function PurchaseSummary({ snapshot }: { snapshot: PurchaseSnapshot }) {
   );
 }
 
-export function DeliverySummary({ snapshot }: { snapshot: PurchaseSnapshot }) {
+export function DeliverySummary({
+  snapshot,
+  cancelled = false,
+}: {
+  snapshot: PurchaseSnapshot;
+  cancelled?: boolean;
+}) {
   const { delivery } = snapshot;
   return (
     <section
@@ -90,7 +96,7 @@ export function DeliverySummary({ snapshot }: { snapshot: PurchaseSnapshot }) {
         id="delivery-review-heading"
         className="font-display text-brand-strong text-2xl"
       >
-        Delivered to your door
+        {cancelled ? "Original delivery details" : "Delivered to your door"}
       </h2>
       <p className="mt-3 text-sm font-bold">
         {formatLocalDateLabel(snapshot.fulfillmentDate)}

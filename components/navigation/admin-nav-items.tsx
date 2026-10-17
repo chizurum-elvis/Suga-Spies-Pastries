@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 import { usePathname } from "next/navigation";
 import {
   CakeSlice,
@@ -9,19 +9,23 @@ import {
   PackageOpen,
   Settings2,
   ShoppingBag,
-  Truck,
+  FilePenLine,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils/cn";
 
 export const adminNavigationItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/menu", label: "Menu", icon: CakeSlice },
   { href: "/admin/orders", label: "Orders", icon: ShoppingBag },
-  { href: "/admin#production", label: "Production", icon: PackageOpen },
-  { href: "/admin/availability", label: "Availability", icon: CalendarDays },
-  { href: "/admin/delivery", label: "Delivery pricing", icon: Truck },
-  { href: "/admin#settings", label: "Business settings", icon: Settings2 },
+  { href: "/admin/production", label: "Kitchen plan", icon: PackageOpen },
+  { href: "/admin/menu", label: "Menu", icon: CakeSlice },
+  {
+    href: "/admin/availability",
+    label: "Delivery calendar",
+    icon: CalendarDays,
+  },
+  { href: "/admin/content", label: "Website content", icon: FilePenLine },
+  { href: "/admin/settings", label: "Settings", icon: Settings2 },
 ] as const;
 
 type AdminNavItemsProps = {
@@ -38,7 +42,13 @@ export function AdminNavItems({ compact = false }: AdminNavItemsProps) {
         const isCurrent =
           itemPath === "/admin"
             ? pathname === "/admin"
-            : pathname.startsWith(itemPath);
+            : pathname === itemPath ||
+              pathname.startsWith(`${itemPath}/`) ||
+              (itemPath === "/admin/orders" &&
+                (pathname === "/admin/external-orders" ||
+                  pathname.startsWith("/admin/external-orders/"))) ||
+              (itemPath === "/admin/settings" &&
+                pathname === "/admin/delivery");
 
         return (
           <li key={item.href}>
@@ -48,18 +58,17 @@ export function AdminNavItems({ compact = false }: AdminNavItemsProps) {
               title={compact ? item.label : undefined}
               className={cn(
                 "flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-bold transition-colors",
-                compact && "justify-center px-0",
+                compact &&
+                  "min-h-14 flex-col justify-center gap-1 px-1 py-2 text-center text-[0.6875rem] leading-4",
                 isCurrent
                   ? "bg-brand-soft text-brand-strong"
                   : "text-ink-soft hover:bg-canvas-strong hover:text-ink",
               )}
             >
               <Icon className="size-5 shrink-0" aria-hidden="true" />
-              {compact ? (
-                <span className="sr-only">{item.label}</span>
-              ) : (
-                item.label
-              )}
+              <span className={compact ? "max-w-full break-words" : undefined}>
+                {item.label}
+              </span>
             </Link>
           </li>
         );

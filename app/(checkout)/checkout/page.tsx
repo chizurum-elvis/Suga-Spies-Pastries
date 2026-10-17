@@ -7,6 +7,12 @@ import {
   CHECKOUT_DRAFT_COOKIE,
   getCheckoutDraft,
 } from "@/lib/fulfillment/checkout-draft";
+import { getCustomerIdentity } from "@/lib/customer/identity";
+import {
+  getCustomerProfile,
+  profileToDeliveryInput,
+} from "@/lib/customer/profile";
+import type { DeliveryInput } from "@/lib/delivery/schema";
 
 export const metadata: Metadata = {
   title: "Checkout",
@@ -31,10 +37,24 @@ export default async function CheckoutPage() {
 
   if (!initialDraft) redirect("/menu?cart=date");
 
+  const account = await getCustomerIdentity();
+  let savedDetails: DeliveryInput | null = null;
+  if (account) {
+    try {
+      const profile = await getCustomerProfile(account);
+      if (profile)
+        savedDetails = profileToDeliveryInput(profile, account.email);
+    } catch {
+      // Saved details are optional. Guest-style checkout remains available.
+    }
+  }
+
   return (
     <CheckoutFlow
       key={`${initialDraft.date}:${initialDraft.expiresAt}`}
       initialDraft={initialDraft}
+      savedDetails={savedDetails}
+      accountEmail={account?.email}
     />
   );
 }

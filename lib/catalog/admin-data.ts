@@ -188,6 +188,7 @@ export async function getAdminProduct(
     "Uncategorised";
 
   const mappedVariants: CatalogueVariant[] = variants.map((variant) => ({
+    updatedAt: variant.updated_at,
     id: variant.id,
     name: variant.name,
     priceCents: variant.price_cents,
@@ -199,6 +200,7 @@ export async function getAdminProduct(
     status: variant.status,
   }));
   const mappedGroups: CatalogueOptionGroup[] = groups.map((group) => ({
+    updatedAt: group.updated_at,
     id: group.id,
     name: group.name,
     selectionType: group.selection_type,
@@ -209,6 +211,7 @@ export async function getAdminProduct(
     values: values
       .filter((value) => value.option_group_id === group.id)
       .map((value) => ({
+        updatedAt: value.updated_at,
         id: value.id,
         name: value.name,
         priceDeltaCents: value.price_delta_cents,

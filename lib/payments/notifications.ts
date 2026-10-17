@@ -1,4 +1,5 @@
 import "server-only";
+import { getOperationalSettings } from "@/lib/admin/settings";
 import { getServerEnvironment } from "@/lib/env/server";
 import { createSecretSupabaseClient } from "@/lib/supabase/secret";
 import { createOrderAccess } from "@/lib/payments/order-access";
@@ -6,7 +7,9 @@ import { purchaseSnapshotSchema } from "@/lib/payments/schema";
 import { formatBusinessDateTime, formatCurrency } from "@/lib/i18n/format";
 import { formatLocalDateLabel } from "@/lib/fulfillment/rules";
 import type { NotificationRow, OrderRow } from "@/lib/payments/database";
-import { businessConfig } from "@/lib/config/business";
+import { getPublicContact } from "@/lib/content/public-data";
+import { defaultContactContent } from "@/lib/content/defaults";
+import { orderEmailSender } from "@/lib/payments/email-configuration";
 
 const escapeHtml = (value: string) =>
   value.replace(
@@ -29,13 +32,24 @@ export function fulfillmentUpdateText(
   order: OrderRow,
   orderUrl: string,
   event: {
+    event_type?: string;
     customer_title: string;
     customer_message: string;
     occurred_at: string;
   },
+  supportPhone: string = defaultContactContent.phone,
 ) {
   const snapshot = purchaseSnapshotSchema.parse(order.snapshot);
-  return `${snapshot.testOnly ? "DEVELOPMENT TEST — no real order\n\n" : ""}${event.customer_title}: ${order.order_number}\n\n${event.customer_message}\n\nDelivery date: ${formatLocalDateLabel(snapshot.fulfillmentDate)}\nUpdated: ${formatBusinessDateTime(event.occurred_at)}\n\nTrack your order: ${orderUrl}\n\nQuestions? Call ${businessConfig.supportPhoneDisplay}.`;
+  return `${snapshot.testOnly ? "DEVELOPMENT TEST — no real order\n\n" : ""}${event.customer_title}: ${order.order_number}\n\n${event.customer_message}\n\n${event.event_type === "redelivery" ? "Original delivery date" : "Delivery date"}: ${formatLocalDateLabel(snapshot.fulfillmentDate)}\nUpdated: ${formatBusinessDateTime(event.occurred_at)}\n\nTrack your order: ${orderUrl}\n\nQuestions? Call ${supportPhone}.`;
+}
+
+export function cancellationText(
+  order: OrderRow,
+  orderUrl: string,
+  supportPhone: string = defaultContactContent.phone,
+) {
+  const snapshot = purchaseSnapshotSchema.parse(order.snapshot);
+  return `${snapshot.testOnly ? "DEVELOPMENT TEST — no real order\n\n" : ""}Order cancelled: ${order.order_number}\n\nThe pastry delivery for ${formatLocalDateLabel(snapshot.fulfillmentDate)} has been cancelled. A full refund of ${formatCurrency(snapshot.totalCents / 100)} CAD, including delivery, has been requested to the original payment method.\n\nCheck the refund status: ${orderUrl}\n\nQuestions? Call ${supportPhone}.`;
 }
 
 export async function sendOrderNotifications() {
@@ -88,6 +102,9 @@ export async function sendOrderNotifications() {
 async function sendNotification(notification: NotificationRow) {
   const db = createSecretSupabaseClient();
   const env = getServerEnvironment();
+  if (!env.ORDER_EMAIL_FROM)
+    throw new Error("The order email sender is not configured.");
+  const supportPhone = (await getPublicContact()).phone;
   const result = await db
     .from("payment_attempts")
     .select("*")
@@ -95,13 +112,12 @@ async function sendNotification(notification: NotificationRow) {
     .single();
   if (result.error) throw new Error("Payment notification unavailable.");
   const snapshot = purchaseSnapshotSchema.parse(result.data.snapshot);
-  const owner =
-    notification.kind === "owner_order" ||
-    notification.kind === "owner_exception";
+  const owner = notification.kind.startsWith("owner_");
   const recipient = snapshot.testOnly
     ? env.ORDER_TEST_EMAIL
     : owner
-      ? env.ORDER_ALERT_EMAIL
+      ? ((await getOperationalSettings()).owner_alert_email ??
+        env.ORDER_ALERT_EMAIL)
       : snapshot.delivery.email;
   if (!recipient) throw new Error("Notification recipient is not configured.");
   const site = env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -117,16 +133,28 @@ async function sendNotification(notification: NotificationRow) {
     const url = owner
       ? `${site}/admin/orders/${order.data.id}`
       : `${site}/orders/${order.data.id}#access=${createOrderAccess(order.data.id, snapshot.fulfillmentDate)}`;
-    if (notification.order_event_id) {
+    if (notification.kind === "owner_refund_attention") {
+      text =
+        order.data.status === "confirmed"
+          ? `The redelivery payment or fee refund for ${order.data.order_number} needs attention. This order is not confirmed for redelivery. Reconcile it with Stripe before any further charge or delivery.\n\nReview the order: ${url}`
+          : `The refund for ${order.data.order_number} needs attention. The order remains closed. Check both the original-payment and any redelivery-fee refund in the dashboard.\n\nCheck the refund: ${url}`;
+      subject = `${snapshot.testOnly ? "[TEST] " : ""}Refund needs attention — ${order.data.order_number}`;
+    } else if (
+      notification.kind === "customer_cancelled" ||
+      notification.kind === "owner_cancellation"
+    ) {
+      text = cancellationText(order.data, url, supportPhone);
+      subject = `${snapshot.testOnly ? "[TEST] " : ""}Order cancelled — ${order.data.order_number}`;
+    } else if (notification.order_event_id) {
       const event = await db
         .from("order_events")
-        .select("customer_title,customer_message,occurred_at")
+        .select("event_type,customer_title,customer_message,occurred_at")
         .eq("id", notification.order_event_id)
         .eq("order_id", order.data.id)
         .eq("customer_visible", true)
         .single();
       if (event.error) throw new Error("Order update unavailable.");
-      text = fulfillmentUpdateText(order.data, url, event.data);
+      text = fulfillmentUpdateText(order.data, url, event.data, supportPhone);
       subject = `${snapshot.testOnly ? "[TEST] " : ""}${event.data.customer_title} — ${order.data.order_number}`;
     } else {
       text = confirmationText(order.data, url, owner);
@@ -141,7 +169,7 @@ async function sendNotification(notification: NotificationRow) {
       "Idempotency-Key": `order-notification/${notification.id}`,
     },
     body: JSON.stringify({
-      from: env.ORDER_EMAIL_FROM,
+      from: orderEmailSender(env.ORDER_EMAIL_FROM),
       to: [recipient],
       subject,
       text,

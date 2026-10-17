@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { suggestCatalogueSlug } from "@/lib/catalog/slug";
 import { FolderPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -18,8 +19,17 @@ type CategoryAction = (
 ) => Promise<CatalogueActionState>;
 
 export function CategoryForm({ action }: { action: CategoryAction }) {
+  const [slug, setSlug] = useState("");
+  const [customSlug, setCustomSlug] = useState(false);
   const [state, formAction, pending] = useActionState(
-    action,
+    async (previous: CatalogueActionState, form: FormData) => {
+      const next = await action(previous, form);
+      if (next.status === "success") {
+        setSlug("");
+        setCustomSlug(false);
+      }
+      return next;
+    },
     initialCatalogueActionState,
   );
   const formRef = useRef<HTMLFormElement>(null);
@@ -35,15 +45,36 @@ export function CategoryForm({ action }: { action: CategoryAction }) {
       <CatalogueActionMessage state={state} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Field id="category-name" label="Category name" required>
-          {(props) => <Input {...props} name="name" maxLength={80} required />}
+          {(props) => (
+            <Input
+              {...props}
+              name="name"
+              maxLength={80}
+              required
+              onChange={(event) => {
+                if (!customSlug)
+                  setSlug(suggestCatalogueSlug(event.target.value, 80));
+              }}
+            />
+          )}
         </Field>
-        <Field id="category-slug" label="URL slug" required>
+        <Field
+          id="category-slug"
+          label="Website page address"
+          description="Suggested from the name. You can leave it as it is."
+          required
+        >
           {(props) => (
             <Input
               {...props}
               name="slug"
               maxLength={80}
               placeholder="celebration-cakes"
+              value={slug}
+              onChange={(event) => {
+                setCustomSlug(true);
+                setSlug(event.target.value);
+              }}
               required
             />
           )}

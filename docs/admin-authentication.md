@@ -14,7 +14,7 @@ Suga Spies has one private owner workspace and no public admin sign-up. A valid 
 - Fail-closed configuration, identity-service, and membership-service states.
 - Private, non-cacheable, non-indexable responses for every `/admin` route.
 
-Customer accounts, menu management, orders, and payments are separate vertical slices and are not connected to this workspace yet.
+Customer accounts have their own public registration and recovery routes. They still cannot enter the owner workspace without an active `admin_users` membership. See `docs/customer-accounts-vertical-slice.md` for shared recovery-email setup.
 
 ## 1. Add the local environment values
 
@@ -47,7 +47,7 @@ Never point an unreviewed migration at the production project. Use a separate de
 
 The local values are recorded in `supabase/config.toml`. In the hosted Supabase dashboard, configure the equivalent settings:
 
-1. Disable general user sign-ups and email sign-ups.
+1. Enable general/email signup for optional customer accounts. This does not grant owner access: `admin_users` remains the private allow-list.
 2. Require at least 12 password characters with lowercase, uppercase, number, and symbol.
 3. Keep email confirmation and secure password changes enabled.
 4. Set the site URL to the correct environment origin.
@@ -57,7 +57,7 @@ The local values are recorded in `supabase/config.toml`. In the hosted Supabase 
    - your production equivalent
 6. Set the session timebox to 24 hours and inactivity timeout to 8 hours where the project plan supports those controls.
 
-In Authentication → Email Templates → Reset Password, use the contents of `supabase/templates/recovery.html`. The template sends the owner to `/admin/recover` with a token hash. That page requires an intentional button press, preventing email preview or security-prefetch tools from consuming the one-time recovery token on a background GET request.
+In Authentication → Email Templates → Reset Password, use the shared `supabase/templates/recovery.html`. It uses the server-selected `redirectTo` path: owner recovery still reaches `/admin/recover`, while customer recovery reaches `/account/recover`. Both require an intentional button press before a token is consumed.
 
 Use a custom production SMTP provider before relying on password-recovery email in production. Disable click tracking for authentication emails so the provider does not rewrite secure links. Supabase's local mail catcher is appropriate for local testing; the hosted default sender is rate-limited and is not a production mail service.
 
@@ -101,7 +101,7 @@ Start the site with `npm run dev`, then test in a private/incognito window:
 2. Confirm the page says “Welcome back to the kitchen side,” contains no sign-up option, and works at narrow mobile width without horizontal scrolling.
 3. Submit an invalid email, an empty password, and an extremely long password. Each attempt should remain on the form, preserve only the email, and never place the password back into the page.
 4. Use a valid-looking but incorrect password. The error must not reveal whether the email exists or whether the password alone was wrong.
-5. Sign in with the approved owner. The browser should reach `/admin`, show the owner's normalized email in the private shell, and show no customer or order data because those slices are not built yet.
+5. Sign in with the approved owner. The browser should reach `/admin` and show the seven-section bakery manager. Overview, Orders, and Kitchen plan use real authorized data; test orders are separate from live orders.
 6. Open `/admin` in a second private window. It must still redirect to sign-in.
 7. Sign out from desktop navigation, then sign back in and sign out from the mobile menu. The Back button and a direct visit to `/admin` must not reopen the workspace.
 8. In Supabase SQL Editor, temporarily set the owner's `is_active` to `false`. A fresh `/admin` request must be denied. Set it back to `true` after the check.
@@ -121,7 +121,7 @@ npm run build
 npm run test:e2e
 ```
 
-The default browser suite verifies the unauthenticated, fail-closed state without storing owner credentials. A real successful-login check remains a deliberate manual test until a dedicated, non-production end-to-end owner account is created.
+The default browser suite verifies the unauthenticated, fail-closed state without storing owner credentials. `tests/e2e/admin-content-navigation.spec.ts` provides an opt-in, read-only authenticated acceptance check using the approved existing test owner. It keeps its temporary session in memory, disables authentication traces/video, and signs out that inspection session afterwards.
 
 ## Removing owner access
 

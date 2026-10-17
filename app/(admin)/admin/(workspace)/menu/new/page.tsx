@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AdminLink as Link } from "@/components/navigation/admin-link";
 import { ArrowLeft } from "lucide-react";
 
 import { ProductForm } from "@/components/admin/product-form";

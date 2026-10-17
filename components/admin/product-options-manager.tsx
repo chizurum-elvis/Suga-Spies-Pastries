@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { CatalogueActionMessage } from "@/components/admin/catalogue-action-message";
 import { NestedStateButton } from "@/components/admin/nested-state-button";
+import { ChoiceEditor } from "@/components/admin/choice-editor";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { formatCents } from "@/lib/catalog/presentation";
@@ -81,11 +82,11 @@ export function ProductOptionsManager({
     <div className="grid gap-8">
       <section aria-labelledby="variants-admin-heading">
         <h3 id="variants-admin-heading" className="font-extrabold">
-          Variants
+          Sizes and styles
         </h3>
         <p className="text-ink-soft mt-1 text-sm leading-6">
-          Use variants only when a purchasable size or style has its own price
-          or quantity rule.
+          Add a size or style only when customers can buy it at a different
+          price or quantity.
         </p>
         {variants.length ? (
           <ul className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -116,6 +117,11 @@ export function ProductOptionsManager({
                   itemType="variant"
                   available={variant.isAvailable}
                   archived={variant.status === "archived"}
+                />
+                <ChoiceEditor
+                  productId={productId}
+                  itemType="variant"
+                  choice={variant}
                 />
               </li>
             ))}
@@ -223,6 +229,11 @@ export function ProductOptionsManager({
                     archived={group.status === "archived"}
                   />
                 </div>
+                <ChoiceEditor
+                  productId={productId}
+                  itemType="option_group"
+                  choice={group}
+                />
                 {group.values.length ? (
                   <ul className="mt-3 flex flex-wrap gap-2">
                     {group.values.map((value) => (
@@ -236,6 +247,12 @@ export function ProductOptionsManager({
                             ? ` +${formatCents(value.priceDeltaCents)}`
                             : ""}
                         </span>
+                        <ChoiceEditor
+                          productId={productId}
+                          itemType="option_value"
+                          groupId={group.id}
+                          choice={value}
+                        />
                         <NestedStateButton
                           action={changeStateAction}
                           productId={productId}

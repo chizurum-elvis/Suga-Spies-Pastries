@@ -11,6 +11,7 @@ import { PaymentCheckout } from "@/components/checkout/payment-checkout";
 import { formatCents } from "@/lib/catalog/presentation";
 import { serializeCart } from "@/lib/cart/schema";
 import type { DeliveryState } from "@/lib/delivery/schema";
+import type { DeliveryInput } from "@/lib/delivery/schema";
 import type { CheckoutDraftSummary } from "@/lib/fulfillment/types";
 import type { PaymentAttemptView } from "@/lib/payments/schema";
 import { cn } from "@/lib/utils/cn";
@@ -206,8 +207,12 @@ function OrderSummary({
 
 export function CheckoutFlow({
   initialDraft,
+  savedDetails,
+  accountEmail,
 }: {
   initialDraft: CheckoutDraftSummary;
+  savedDetails?: DeliveryInput | null;
+  accountEmail?: string | null;
 }) {
   const { cart, hydrated, priceChanges, validation, setCheckoutLocked } =
     useCart();
@@ -302,6 +307,8 @@ export function CheckoutFlow({
               embedded
               locked={paymentLocked}
               onStateChange={handleDeliveryState}
+              savedDetails={savedDetails}
+              accountEmail={accountEmail}
             />
           </section>
 

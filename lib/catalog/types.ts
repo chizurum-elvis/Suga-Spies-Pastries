@@ -10,6 +10,7 @@ export type CatalogueImage = {
 };
 
 export type CatalogueVariant = {
+  updatedAt?: string;
   id: string;
   name: string;
   priceCents: number | null;
@@ -22,6 +23,7 @@ export type CatalogueVariant = {
 };
 
 export type CatalogueOptionValue = {
+  updatedAt?: string;
   id: string;
   name: string;
   priceDeltaCents: number;
@@ -30,6 +32,7 @@ export type CatalogueOptionValue = {
 };
 
 export type CatalogueOptionGroup = {
+  updatedAt?: string;
   id: string;
   name: string;
   selectionType: "single" | "multiple" | "quantity";

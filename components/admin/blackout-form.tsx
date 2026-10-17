@@ -77,6 +77,17 @@ export function BlackoutForm({
           />
         )}
       </Field>
+      <label className="flex min-h-11 items-start gap-3 text-sm leading-5">
+        <input
+          type="checkbox"
+          name="confirmCommitments"
+          className="accent-brand mt-1 size-4 shrink-0"
+        />
+        <span>
+          If this date already has orders, I have reviewed them and will still
+          fulfil them.
+        </span>
+      </label>
       <Button
         type="submit"
         variant="secondary"

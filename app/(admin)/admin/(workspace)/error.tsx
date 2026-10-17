@@ -12,11 +12,11 @@ export default function AdminWorkspaceError({
   return (
     <StatePanel
       tone="error"
-      title="The owner workspace did not load"
+      title="This section could not be loaded"
       description={
         error.digest
-          ? `No changes were made. Retry this section or contact technical support with reference ${error.digest}.`
-          : "No changes were made. Check the connection and retry this section."
+          ? `Please retry. If you just saved a change, check its current status before submitting again. Support reference: ${error.digest}.`
+          : "Check the connection and retry. If you just saved a change, check its current status before submitting again."
       }
       onRetry={retry}
     />

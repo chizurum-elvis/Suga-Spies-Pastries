@@ -1,0 +1,46 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions;
+create temporary table workspace_tap(line text);
+grant all on workspace_tap to anon, authenticated;
+insert into workspace_tap select no_plan();
+insert into auth.users(id,email,email_confirmed_at) values
+('98700000-0000-4000-8000-000000000001','workspace-owner@example.com',now()),
+('98700000-0000-4000-8000-000000000002','workspace-customer@example.com',now());
+insert into public.admin_users(user_id,role,is_active) values ('98700000-0000-4000-8000-000000000001','owner',true);
+create temporary table workspace_version as select version from public.business_settings;
+grant select on workspace_version to authenticated;
+insert into workspace_tap select ok(not has_table_privilege('anon','public.business_settings','select'),'public cannot read private settings');
+insert into workspace_tap select ok(not has_table_privilege('anon','public.admin_order_index','select'),'public cannot read order index');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"98700000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+insert into workspace_tap select is((select count(*)::integer from public.business_settings),0,'customer cannot read settings');
+insert into workspace_tap select is((select count(*)::integer from public.admin_order_index),0,'customer cannot read admin order index');
+insert into workspace_tap select throws_ok($q$select public.owner_sales_summary(current_date,current_date,false)$q$,'42501','owner_required','customer cannot request sales');
+update public.business_settings set accepting_orders = false;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"98700000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+insert into workspace_tap select is((select count(*)::integer from public.business_settings),1,'owner reads settings');
+update public.business_settings set accepting_orders = false, owner_alert_email='owner-alert@example.com';
+insert into workspace_tap select is((select version from public.business_settings),(select version+1 from workspace_version),'settings version increments automatically');
+insert into workspace_tap select is((select count(*)::integer from public.business_settings_history where changed_by='98700000-0000-4000-8000-000000000001'),1,'owner change audited');
+insert into workspace_tap select throws_ok($q$update public.business_settings set version = 1$q$,'42501',null,'owner cannot forge the settings version');
+insert into workspace_tap select throws_ok($q$update public.business_settings set pause_message = ''$q$,'23514',null,'blank pause message rejected');
+insert into workspace_tap select throws_ok($q$update public.business_settings set owner_alert_email = 'not-an-email'$q$,'23514',null,'invalid alert address rejected');
+insert into workspace_tap select throws_ok($q$select public.owner_sales_summary(current_date,current_date+367,false)$q$,'22023','invalid_sales_range','unbounded sales query rejected');
+insert into workspace_tap select ok((public.owner_sales_summary(current_date,current_date,false)->>'orders')::integer >= 0,'owner receives actual aggregate');
+reset role;
+-- The pause guard must execute before any provider-bound attempt is inserted.
+insert into workspace_tap select throws_ok($q$insert into public.payment_attempts(id) values(gen_random_uuid())$q$,'23514','new_orders_paused','new payment attempt cannot bypass ordering pause');
+update public.business_settings set accepting_orders = true;
+insert into workspace_tap select ok((select accepting_orders from public.business_settings),'pause is reversible');
+update public.admin_users set is_active=false where user_id='98700000-0000-4000-8000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"98700000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+insert into workspace_tap select is((select count(*)::integer from public.business_settings),0,'revoked owner loses settings access immediately');
+insert into workspace_tap select throws_ok($q$select public.owner_sales_summary(current_date,current_date,false)$q$,'42501','owner_required','revoked owner cannot read sales');
+reset role;
+insert into workspace_tap select * from finish();
+select line from workspace_tap;
+rollback;

@@ -72,6 +72,24 @@ describe("checkout security boundary", () => {
     expect(
       paymentConfiguration({ ...ready, PAYMENTS_MODE: "live" }).blockers,
     ).toContain("Checkout policies are awaiting approval."));
+  it("blocks the shared Resend test sender in live checkout", () => {
+    expect(
+      paymentConfiguration({
+        ...ready,
+        APP_ENV: "production",
+        PAYMENTS_MODE: "live",
+        ORDER_EMAIL_FROM: "onboarding@resend.dev",
+      }).blockers,
+    ).toContain("Business email sending is awaiting setup.");
+  });
+  it("keeps the shared Resend sender usable for sandbox testing", () => {
+    expect(
+      paymentConfiguration({
+        ...ready,
+        ORDER_EMAIL_FROM: "onboarding@resend.dev",
+      }).blockers,
+    ).toEqual([]);
+  });
   it("rejects a browser-supplied price", () =>
     expect(
       startPaymentSchema.safeParse({
@@ -116,7 +134,7 @@ describe("checkout security boundary", () => {
     );
     expect(verifyOrderAccess("other-order", token, 0)).toBe(false);
     expect(verifyOrderAccess(id, token + "x", 0)).toBe(false);
-    expect(verifyOrderAccess(id, token, new Date("2026-12-01").getTime())).toBe(
+    expect(verifyOrderAccess(id, token, new Date("2027-02-11").getTime())).toBe(
       false,
     );
   });

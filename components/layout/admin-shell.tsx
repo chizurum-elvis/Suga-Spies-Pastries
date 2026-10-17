@@ -1,104 +1,83 @@
 import type { ReactNode } from "react";
-import { Clock3, LockKeyhole, LogOut } from "lucide-react";
-
+import { AdminLink as Link } from "@/components/navigation/admin-link";
+import { ArrowUpRight, LogOut } from "lucide-react";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { AdminMobileNav } from "@/components/navigation/admin-mobile-nav";
 import { AdminNavItems } from "@/components/navigation/admin-nav-items";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SkipLink } from "@/components/layout/skip-link";
 import { signOutOwner } from "@/lib/auth/actions";
 import type { OwnerIdentity } from "@/lib/auth/owner-access";
-import { BUSINESS_TIME_ZONE } from "@/lib/config/business";
 
-type AdminShellProps = {
+export function AdminShell({
+  children,
+  owner,
+}: {
   children: ReactNode;
   owner: OwnerIdentity;
-};
-
-export function AdminShell({ children, owner }: AdminShellProps) {
+}) {
   return (
-    <div className="text-ink min-h-dvh bg-[#f7f4ef]">
+    <div className="admin-workspace text-ink min-h-dvh bg-[#f7f7f9]">
       <SkipLink />
-
-      <header className="border-border bg-surface-raised/95 sticky top-0 z-40 flex min-h-16 items-center justify-between gap-4 border-b px-4 backdrop-blur md:hidden">
-        <div>
-          <p className="text-ink-faint text-xs font-bold tracking-[0.12em] uppercase">
-            Owner workspace
-          </p>
-          <p className="text-ink text-sm font-extrabold">Suga Spies</p>
-        </div>
+      <header className="admin-chrome border-border sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b bg-white px-4 lg:hidden">
+        <Link href="/admin" className="text-sm font-bold">
+          Suga &amp; Spies{" "}
+          <span className="text-ink-soft ml-2 font-normal">Bakery manager</span>
+        </Link>
         <AdminMobileNav ownerEmail={owner.email} signOutAction={signOutOwner} />
       </header>
-
-      <aside className="border-border bg-surface-raised fixed inset-y-0 left-0 z-30 hidden w-20 flex-col border-r px-3 py-5 md:flex xl:w-72 xl:px-5">
-        <div className="px-1 xl:px-0">
-          <span className="xl:hidden">
-            <BrandMark compact />
-          </span>
-          <span className="hidden xl:inline-flex">
-            <BrandMark />
-          </span>
+      <aside className="admin-chrome border-border fixed inset-y-0 left-0 z-30 hidden w-60 flex-col overflow-y-auto border-r bg-white px-4 py-6 lg:flex">
+        <div className="px-2">
+          <BrandMark prefetch={false} />
+          <p className="text-ink-soft mt-3 text-xs">Bakery manager</p>
         </div>
-
-        <div className="mt-8 hidden xl:block">
-          <Badge tone="accent">Owner workspace</Badge>
-        </div>
-
-        <nav aria-label="Admin navigation" className="mt-7 flex-1">
-          <div className="xl:hidden">
-            <AdminNavItems compact />
-          </div>
-          <div className="hidden xl:block">
-            <AdminNavItems />
-          </div>
+        <nav aria-label="Admin navigation" className="mt-8 flex-1">
+          <AdminNavItems />
         </nav>
-
-        <div className="grid gap-3">
-          <div className="border-border bg-canvas-strong text-ink-soft rounded-md border p-3 text-xs leading-5">
-            <Clock3 className="mx-auto size-4 xl:mx-0" aria-hidden="true" />
-            <p className="mt-2 hidden xl:block">
-              Times and business cutoffs use {BUSINESS_TIME_ZONE}.
-            </p>
-            <span className="sr-only xl:hidden">
-              Times use {BUSINESS_TIME_ZONE}.
-            </span>
-          </div>
-
-          <div className="border-border bg-surface text-ink-soft hidden min-w-0 rounded-md border p-3 text-xs leading-5 xl:block">
-            <LockKeyhole className="size-4" aria-hidden="true" />
-            <p
-              className="text-ink mt-2 truncate font-extrabold"
-              title={owner.email}
-            >
+        <div className="border-border mt-8 border-t pt-4">
+          <Link
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-ink-soft hover:text-brand flex min-h-11 items-center justify-between gap-2 px-3 text-sm"
+          >
+            View website <ArrowUpRight className="size-4" aria-hidden="true" />
+          </Link>
+          <div className="mt-3 px-3">
+            <p className="truncate text-sm font-bold">
               {owner.displayName ?? "Owner"}
             </p>
-            <p className="truncate" title={owner.email}>
+            <p
+              className="text-ink-soft mt-1 truncate text-xs"
+              title={owner.email}
+            >
               {owner.email}
             </p>
-            <form action={signOutOwner} className="mt-3">
-              <Button
-                type="submit"
-                variant="quiet"
-                size="sm"
-                className="w-full"
-              >
-                <LogOut className="size-4" aria-hidden="true" />
-                Sign out
-              </Button>
-            </form>
           </div>
+          <form action={signOutOwner} className="mt-3">
+            <Button
+              type="submit"
+              variant="quiet"
+              size="sm"
+              className="w-full justify-start"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+              Sign out
+            </Button>
+          </form>
         </div>
       </aside>
-
       <main
         id="main-content"
         tabIndex={-1}
-        className="min-w-0 outline-none md:pl-20 xl:pl-72"
+        className="min-w-0 outline-none lg:pl-60"
       >
-        <div className="mx-auto w-full max-w-[100rem] px-4 py-6 sm:px-6 md:py-8 lg:px-8">
+        <div className="mx-auto w-full max-w-[92rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-9">
           {children}
         </div>
+        <footer className="admin-chrome border-border text-ink-soft mx-4 border-t py-5 text-xs sm:mx-6 lg:mx-8">
+          Suga &amp; Spies · All dates and deadlines use Toronto time.
+        </footer>
       </main>
     </div>
   );

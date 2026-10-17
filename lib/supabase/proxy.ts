@@ -26,11 +26,12 @@ function redirectWithSessionCookies(
 
 export async function updateSupabaseSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const adminPath = pathname.startsWith("/admin");
   const isPublicPath = isPublicAdminPath(pathname);
   const configuration = getSupabaseConfigurationState();
 
   if (configuration.status !== "configured") {
-    return isPublicPath
+    return !adminPath || isPublicPath
       ? NextResponse.next({ request })
       : NextResponse.redirect(
           new URL(
@@ -77,7 +78,7 @@ export async function updateSupabaseSession(request: NextRequest) {
   const { data, error } = await supabase.auth.getClaims();
   const hasVerifiedIdentity = !error && Boolean(data?.claims?.sub);
 
-  if (!hasVerifiedIdentity && !isPublicPath) {
+  if (adminPath && !hasVerifiedIdentity && !isPublicPath) {
     return redirectWithSessionCookies(
       request,
       supabaseResponse,

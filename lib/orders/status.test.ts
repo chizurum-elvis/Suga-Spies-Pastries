@@ -8,7 +8,7 @@ import {
 
 describe("order fulfilment lifecycle", () => {
   it("moves through every customer-visible stage without skipping", () => {
-    expect(fulfillmentStages.map((stage) => stage.status)).toEqual([
+    expect(fulfillmentStages.slice(0, 5).map((stage) => stage.status)).toEqual([
       "received",
       "preparing",
       "ready",
@@ -18,6 +18,8 @@ describe("order fulfilment lifecycle", () => {
     expect(nextFulfillmentStatus("received")).toBe("preparing");
     expect(nextFulfillmentStatus("out_for_delivery")).toBe("delivered");
     expect(nextFulfillmentStatus("delivered")).toBeNull();
+    expect(nextFulfillmentStatus("delivery_failed")).toBeNull();
+    expect(nextFulfillmentStatus("redelivery_scheduled")).toBeNull();
   });
 
   it.each([

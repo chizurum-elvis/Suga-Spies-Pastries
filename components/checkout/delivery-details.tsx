@@ -15,7 +15,7 @@ import {
   type DeliveryInput,
   type DeliveryState,
 } from "@/lib/delivery/schema";
-import { businessConfig } from "@/lib/config/business";
+import { usePublicContact } from "@/components/content/contact-provider";
 
 type Problem = { code: string; message: string };
 const DELIVERY_CITIES = ["Toronto", "Markham", "Mississauga"] as const;
@@ -80,12 +80,17 @@ export function DeliveryDetails({
   locked = false,
   onStateChange,
   refreshKey = 0,
+  savedDetails = null,
+  accountEmail = null,
 }: {
   embedded?: boolean;
   locked?: boolean;
   onStateChange?: (delivery: DeliveryState | null) => void;
   refreshKey?: number;
+  savedDetails?: DeliveryInput | null;
+  accountEmail?: string | null;
 }) {
+  const contact = usePublicContact();
   const { cart, hydrated, validation, priceChanges } = useCart();
   const [delivery, setDelivery] = useState<DeliveryState | null>(null);
   const [input, setInput] = useState<DeliveryInput>(emptyInput);
@@ -146,7 +151,10 @@ export function DeliveryDetails({
     try {
       const saved = await api("GET");
       publish(saved);
-      setInput(saved.input ?? emptyInput);
+      setInput(
+        saved.input ??
+          savedDetails ?? { ...emptyInput, email: accountEmail ?? "" },
+      );
       setDirty(false);
       edited.current = false;
       setProblem(null);
@@ -157,7 +165,7 @@ export function DeliveryDetails({
     } finally {
       setLoading(false);
     }
-  }, [publish, report]);
+  }, [publish, report, savedDetails, accountEmail]);
   useEffect(() => {
     const timer = window.setTimeout(() => void reload(), 0);
     return () => window.clearTimeout(timer);
@@ -185,7 +193,10 @@ export function DeliveryDetails({
         const saved = await api("GET");
         if (!edited.current && !inFlight.current) {
           publish(saved);
-          setInput(saved.input ?? emptyInput);
+          setInput(
+            saved.input ??
+              savedDetails ?? { ...emptyInput, email: accountEmail ?? "" },
+          );
           setQuoteExpired(false);
         }
       } catch (error) {
@@ -201,7 +212,7 @@ export function DeliveryDetails({
       window.removeEventListener("focus", refreshStatus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [publish, report]);
+  }, [publish, report, savedDetails, accountEmail]);
 
   const cartMatches = Boolean(
     delivery && serializeCart(cart) === serializeCart(delivery.cart),
@@ -829,10 +840,10 @@ export function DeliveryDetails({
             <p className="text-ink-soft mt-1">
               For questions about your delivery, call{" "}
               <a
-                href={businessConfig.supportPhoneHref}
+                href={contact.phoneHref}
                 className="text-brand-strong underline"
               >
-                {businessConfig.supportPhoneDisplay}
+                {contact.phone}
               </a>
               .
             </p>
